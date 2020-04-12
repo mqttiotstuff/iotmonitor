@@ -10,7 +10,15 @@ specific monitoring topic failure for the device, with the latest contact timest
 	home/monitoring/expire/[device_name]
 
 
-### Building the project
+### Building the project on linux
+
+
+for building the project, the following elements are needed :
+
+- leveldb library (used for storing stated)
+- C compiler (builds essentials)
+- cmake
+- zig : 0.6
 
 
 

@@ -22,11 +22,13 @@ RUN mkdir bin
 RUN ../zig-linux-x86_64-0.5.0+8e9e126d4/zig build
 
 FROM ubuntu:18.04
+
 RUN apt-get update
 RUN apt-get install -y libleveldb-dev
-WORKDIR /root/
+WORKDIR /iotmonitor/
 COPY --from=builder /build/iotmonitor/bin/iotmonitor .
+RUN chmod a+rx iotmonitor
 
 WORKDIR /config
 
-CMD ["../root/iotmonitor"]
+CMD ["../iotmonitor/iotmonitor"]

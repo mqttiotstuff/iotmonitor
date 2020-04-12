@@ -1,8 +1,8 @@
 
-## IOTManager project
+## IOTMonitor project
 
 This project is a simple monitoring system for MQTT based communication, 
-iotmanager let you monitor the existing devices, using a config file.
+iotmonitor let you monitor the existing devices, using a config file.
 
 Each device has a communication time out, when the timeout is reached, the iotmonitor publish a 
 specific monitoring topic failure for the device, with the latest contact timestamp

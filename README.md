@@ -28,7 +28,9 @@ specific monitoring topic failure for the device, with the latest contact timest
 
 ### Configuration
 
-in the configuration,each device is declared in a section using a "device_" prefix
+The configuration is defined in a `config.toml` file, see an example in the root directory
+
+In the configuration toml file, each device is declared in a section using a "device_" prefix
 in the section : the following elements can be found :
 
 	[device_esp04]

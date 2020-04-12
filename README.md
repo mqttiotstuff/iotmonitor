@@ -20,7 +20,7 @@ for building the project, the following elements are needed :
 - cmake
 - zig : 0.6
 
-
+then launch the following commands :
 
 	git clone --recursive https://github.com/frett27/iotmonitor
 	cd iotmonitor

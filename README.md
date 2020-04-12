@@ -19,6 +19,7 @@ specific monitoring topic failure for the device, with the latest contact timest
 	cd paho.mqtt.c
 	cmake -DPAHO_BUILD_STATIC=true .
 	make
+	cd ..
 
 	mkdir bin
 	zig build

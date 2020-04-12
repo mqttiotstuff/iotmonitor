@@ -78,3 +78,9 @@ seems a target port for zig in antlr4, is a good idea
 https://github.com/antlr/antlr4/blob/master/doc/creating-a-language-target.md
 
 
+### Credits
+
+- zig-toml : for zig toml parser
+- paho eclipse mqtt c library
+- levedb database
+

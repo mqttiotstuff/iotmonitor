@@ -13,6 +13,20 @@ specific monitoring topic failure for the device, with the latest contact timest
 ### Building the project on linux
 
 
+### Using docker, 
+
+build the image :
+
+	cd docker
+	docker build -t iotmonitor .
+
+launch the container from image :
+
+        docker run --rm -d -u $(id --user) -v `pwd`:/config iotmonitor
+
+
+#### From scratch
+
 for building the project, the following elements are needed :
 
 - leveldb library (used for storing stated)

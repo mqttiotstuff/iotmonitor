@@ -2,12 +2,17 @@
 ## IOTMonitor project
 
 This project is a simple monitoring system for MQTT based communication, 
-iotmonitor let you monitor the existing devices, using a config file.
+iotmonitor let you monitor the existing devices, using a config file. And also restore their states when they reconnect to the broker. It really help to maintain things working, even when they fails.
 
 Each device has a communication time out, when the timeout is reached, the iotmonitor publish a 
 specific monitoring topic failure for the device, with the latest contact timestamp
 
 	home/monitoring/expire/[device_name]
+
+This topic can then be displayed or alerted to see which device has problems.
+
+
+Each time a device receive MQTT state messages, theses are recorded in a leveldb database, and replay when the device recover.
 
 
 ### Building the project on linux

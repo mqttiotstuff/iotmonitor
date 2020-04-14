@@ -1,18 +1,15 @@
 
 ## IOTMonitor project
 
-This project is a simple monitoring system for MQTT based communication, 
-iotmonitor let you monitor the existing devices, using a config file. And also restore their states when they reconnect to the broker. It really help to maintain things working, even if they fails.
+This project is a simple state manager and monitoring system for MQTT based communication devices (IOT). Iotmonitor let you monitor the existing devices, using a config file, with a `zig` process. 
+IotMonitor also record and restore their states, when they reconnect to the broker. It really help to maintain things working, even if they fails.
 
-Each device has a communication time out, when the timeout is reached, the iotmonitor publish a 
-specific monitoring topic failure for the device, with the latest contact timestamp
+Each device has an independent communication message time out, when the device did not reponse until timeout is reached, the iotmonitor publish a specific monitoring failure topic for the device, with the latest contact timestamp
 
 	home/monitoring/expire/[device_name]
 
-This topic can then be displayed or alerted to see which device has problems.
+This topic can then be displayed or alerted to signal which device is not functionnal.
 
-
-Each time a device receive MQTT state messages, theses are recorded in a leveldb database, and replay when the device recover.
 
 
 ### Building the project on linux
@@ -55,7 +52,7 @@ then launch the following commands :
 
 ### Configuration
 
-The configuration is defined in a `config.toml` file, see an example in the root directory
+The configuration is defined in a TOML `config.toml` file, see an example in the root directory
 
 In the configuration toml file, each device is declared in a section using a "device_" prefix
 in the section : the following elements can be found :
@@ -76,11 +73,11 @@ stateTopics : list of topics for recording the states and reset them as they are
 At iotmonitor launch the recorded states for devices are reposted to the topics
 this permit to centralize the state, and restore them when an iot device has rebooted.
 
-### monitoring the monitor
+### Monitoring iotmonitor :-)
 
-each second, a counter is published on home/monitoring/up topic
-this option permit to know if the monitor is still alive, 
-the counter is resetted each launch time
+To be sure all is under control, each second, IotMonitor publish a counter on the `home/monitoring/up` topic
+this option permit to know if the monitor is still operational.
+The counter is resetted at each startup.
 
 ### Developing on the project
 

@@ -120,6 +120,8 @@ pub const MqttCnx = struct {
             .cleanstart = 0, // only available on V5 +
         };
 
+        if (username.len ==0) { conn_options.username = null; conn_options.password = null; }
+
         var self_ptr = try allocator.create(Self);
         self_ptr.handle = handle;
         self_ptr.allocator = allocator;

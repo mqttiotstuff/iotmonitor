@@ -13,6 +13,8 @@ RUN tar xvf zig-linux-x86_64-0.6.0.tar
 
 
 RUN git clone --recursive https://github.com/frett27/iotmonitor
+WORKDIR /build/iotmonitor
+RUN git checkout develop
 WORKDIR /build/iotmonitor/paho.mqtt.c
 RUN cmake -DPAHO_BUILD_STATIC=true .
 RUN make

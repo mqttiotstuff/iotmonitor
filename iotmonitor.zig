@@ -234,17 +234,12 @@ fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename
             return error.ConfigNoPassword;
         }
 
-        if (mqttconfig.getKey("baseTopic")) |baseTopic| {
-            const baseTopicString = baseTopic.String;
-            conf.mqttIotmonitorBaseTopic = try allocator.alloc(u8, baseTopicString.len + 1);
-            conf.mqttIotmonitorBaseTopic[baseTopicString.len] = 0;
-            mem.copy(u8,conf.mqttIotmonitorBaseTopic, baseTopicString[0..baseTopicString.len - 1]);
-        } else {
-            const defaultMonitoring = "home/monitoring";
-            conf.mqttIotmonitorBaseTopic = try allocator.alloc(u8, defaultMonitoring.len + 1);
-            mem.copy(u8,conf.mqttIotmonitorBaseTopic, defaultMonitoring[0..defaultMonitoring.len -1] );
-            conf.mqttIotmonitorBaseTopic[defaultMonitoring.len] = 0;
-        }
+        const topicBase = if (mqttconfig.getKey("baseTopic")) |baseTopic| baseTopic.String else 
+            "home/monitoring";
+
+        conf.mqttIotmonitorBaseTopic = try allocator.alloc(u8, topicBase.len + 1);
+        conf.mqttIotmonitorBaseTopic[topicBase.len] = 0;
+        mem.copy(u8,conf.mqttIotmonitorBaseTopic, topicBase[0..topicBase.len]);
 
     } else {
         return error.ConfignoMqtt;
@@ -399,8 +394,9 @@ fn publishDeviceTimeOut(device: *DeviceInfo) !void {
 
     mem.secureZero(u8, bufferPayload);
     _ = c.sprintf(bufferPayload.ptr, "%d", device.nextContact);
+    const payloadLen = c.strlen(bufferPayload.ptr);
 
-    try cnx.publish(topicBufferPayload.ptr, bufferPayload);
+    try cnx.publish(topicBufferPayload.ptr, bufferPayload[0..payloadLen]);
 }
 
 pub fn main() !void {

@@ -56,6 +56,17 @@ then launch the following commands :
 
 The configuration is defined in a TOML `config.toml` file, see an example in the root directory
 
+Mqtt brocker configuration is done, using `[mqtt]` section
+in the following, the given parameters are found :
+
+	[mqtt]
+	serverAddress="tcp://localhost:1883"
+	baseTopic="home/monitoring"
+	user=""
+	password=""
+
+
+
 In the configuration toml file, each device is declared in a section using a "device_" prefix
 in the section : the following elements can be found :
 

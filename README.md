@@ -11,6 +11,8 @@ Each device has an independent communication message time out, when the device d
 This topic can then be displayed or alerted to signal which device is not functionnal.
 
 
+This project also contains a C Paho MQTT client library, AND a `zig` leveldb client library. They can be reused, and improved independently of the projet.
+
 
 ### Building the project on linux
 

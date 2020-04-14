@@ -1,5 +1,5 @@
 //
-//  IOT Monitor - manage iot component and agents health
+//  IOT Monitor - monitor and recover state for iot device and software agents
 //
 //  pfreydiere - 2019 - 2020
 //
@@ -186,6 +186,7 @@ const Config = struct {
     mqttBroker: []const u8,
     user: []const u8,
     password: []const u8,
+    mqttIotmonitorBaseTopic: [] u8
 };
 
 var MqttConfig: *Config = undefined;
@@ -232,6 +233,19 @@ fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename
         } else {
             return error.ConfigNoPassword;
         }
+
+        if (mqttconfig.getKey("baseTopic")) |baseTopic| {
+            const baseTopicString = baseTopic.String;
+            conf.mqttIotmonitorBaseTopic = try allocator.alloc(u8, baseTopicString.len + 1);
+            conf.mqttIotmonitorBaseTopic[baseTopicString.len] = 0;
+            mem.copy(u8,conf.mqttIotmonitorBaseTopic, baseTopicString[0..baseTopicString.len - 1]);
+        } else {
+            const defaultMonitoring = "home/monitoring";
+            conf.mqttIotmonitorBaseTopic = try allocator.alloc(u8, defaultMonitoring.len + 1);
+            mem.copy(u8,conf.mqttIotmonitorBaseTopic, defaultMonitoring[0..defaultMonitoring.len -1] );
+            conf.mqttIotmonitorBaseTopic[defaultMonitoring.len] = 0;
+        }
+
     } else {
         return error.ConfignoMqtt;
     }
@@ -357,22 +371,28 @@ var cnx: *mqtt.MqttCnx = undefined;
 var cpt: u32 = 0;
 
 fn publishWatchDog() !void {
-    const hello = "home/monitoring/up";
+
+    var topicBufferPayload = try globalAllocator.alloc(u8, 512);
+    defer globalAllocator.free(topicBufferPayload);
+    mem.secureZero(u8, topicBufferPayload);
+    _ = c.sprintf(topicBufferPayload.ptr, "%s/up", MqttConfig.mqttIotmonitorBaseTopic.ptr);
+
     var bufferPayload = try globalAllocator.alloc(u8, 512);
     mem.secureZero(u8, bufferPayload);
     cpt = (cpt + 1) % 1_000_000;
     _ = c.sprintf(bufferPayload.ptr, "%d", cpt);
+    const topicloadLength = c.strlen(topicBufferPayload.ptr);
     const payloadLength = c.strlen(bufferPayload.ptr);
-    try cnx.publish(hello, bufferPayload[0..payloadLength]);
+    try cnx.publish(topicBufferPayload.ptr, bufferPayload[0..payloadLength]);
     globalAllocator.free(bufferPayload);
 }
 
 fn publishDeviceTimeOut(device: *DeviceInfo) !void {
+
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(topicBufferPayload);
-
     mem.secureZero(u8, topicBufferPayload);
-    _ = c.sprintf(topicBufferPayload.ptr, "home/monitoring/expired/%s", device.*.name.ptr);
+    _ = c.sprintf(topicBufferPayload.ptr, "%s/expired/%s", MqttConfig.mqttIotmonitorBaseTopic.ptr, device.*.name.ptr);
 
     var bufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(bufferPayload);

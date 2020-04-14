@@ -6,10 +6,10 @@ RUN apt-get install -y wget xz-utils
 RUN apt-get install -y cmake
 
 WORKDIR /build
-RUN wget https://ziglang.org/builds/zig-linux-x86_64-0.5.0+8e9e126d4.tar.xz
+RUN wget https://ziglang.org/download/0.6.0/zig-linux-x86_64-0.6.0.tar.xz 
 
-RUN xz -d zig-linux-x86_64-0.5.0+8e9e126d4.tar.xz 
-RUN tar xvf zig-linux-x86_64-0.5.0+8e9e126d4.tar
+RUN xz -d zig-linux-x86_64-0.6.0.tar.xz
+RUN tar xvf zig-linux-x86_64-0.6.0.tar
 
 
 RUN git clone --recursive https://github.com/frett27/iotmonitor
@@ -19,7 +19,7 @@ RUN make
 WORKDIR /build/iotmonitor
 RUN mkdir bin
 
-RUN ../zig-linux-x86_64-0.5.0+8e9e126d4/zig build
+RUN ../zig-linux-x86_64-0.6.0/zig build
 
 FROM ubuntu:18.04
 

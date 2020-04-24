@@ -29,8 +29,8 @@ pub fn build(b: *Builder) void {
     // these libs are needed by leveldb backend
     exe.linkSystemLibrary("leveldb");
     // exe.addObjectFile("leveldb/libleveldb.a");
-    exe.linkSystemLibrary("c++");
-    exe.linkSystemLibrary("c++abi");
+    // exe.linkSystemLibrary("c++");
+    //exe.linkSystemLibrary("c++abi");
 
     // exe.setBuildMode(b.standardReleaseOptions());
 

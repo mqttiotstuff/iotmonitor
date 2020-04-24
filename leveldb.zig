@@ -5,10 +5,13 @@ const builtin = @import("builtin");
 const trait = std.meta.trait;
 const debug = std.debug;
 const assert = debug.assert;
-const cleveldb = @import("c_leveldb.zig");
+// const cleveldb = @import("c_leveldb.zig");
 const Allocator = mem.Allocator;
 const mem = std.mem;
 
+const cleveldb = @cImport({
+    @cInclude("leveldb/c.h");
+});
 const c = @cImport({
     @cInclude("stdio.h");
     @cInclude("unistd.h");
@@ -163,7 +166,6 @@ pub fn LevelDBHashWithSerialization(
             cleveldb.leveldb_options_set_create_if_missing(options, 1);
             var err: [*c]u8 = null;
             const result = cleveldb.leveldb_open(options, filename, &err);
-            cleveldb.leveldb_options_set_create_if_missing(options, 1);
 
             if (err != null) {
                 _ = debug.warn("{}", .{"open failed"});
@@ -308,15 +310,19 @@ test "test iterators" {
     const SS = LevelDBHash(u32, u32);
     var l = try SS.init(allocator);
     defer l.deinit();
-
+    debug.warn("opening databse", .{});
     try l.open(filename);
     defer l.close();
 
+    debug.warn("create iterator", .{});
     const iterator = try l.iterator();
     defer iterator.deinit();
+
+    debug.warn("call first", .{});
     iterator.first();
     var r: ?*align(1) u32 = null;
     while (iterator.isValid()) {
+        debug.warn("iterKey", .{});
         r = iterator.iterKey();
         var v = iterator.iterValue();
         debug.warn("key :{} value: {}\n", .{ r.?.*, v.?.* });

@@ -182,11 +182,7 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
 }
 
 const Config = struct {
-    clientId: []const u8,
-    mqttBroker: []const u8,
-    user: []const u8,
-    password: []const u8,
-    mqttIotmonitorBaseTopic: [] u8
+    clientId: []const u8, mqttBroker: []const u8, user: []const u8, password: []const u8, mqttIotmonitorBaseTopic: []u8
 };
 
 var MqttConfig: *Config = undefined;
@@ -234,13 +230,11 @@ fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename
             return error.ConfigNoPassword;
         }
 
-        const topicBase = if (mqttconfig.getKey("baseTopic")) |baseTopic| baseTopic.String else 
-            "home/monitoring";
+        const topicBase = if (mqttconfig.getKey("baseTopic")) |baseTopic| baseTopic.String else "home/monitoring";
 
         conf.mqttIotmonitorBaseTopic = try allocator.alloc(u8, topicBase.len + 1);
         conf.mqttIotmonitorBaseTopic[topicBase.len] = 0;
-        mem.copy(u8,conf.mqttIotmonitorBaseTopic, topicBase[0..topicBase.len]);
-
+        mem.copy(u8, conf.mqttIotmonitorBaseTopic, topicBase[0..topicBase.len]);
     } else {
         return error.ConfignoMqtt;
     }
@@ -366,7 +360,6 @@ var cnx: *mqtt.MqttCnx = undefined;
 var cpt: u32 = 0;
 
 fn publishWatchDog() !void {
-
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(topicBufferPayload);
     mem.secureZero(u8, topicBufferPayload);
@@ -383,7 +376,6 @@ fn publishWatchDog() !void {
 }
 
 fn publishDeviceTimeOut(device: *DeviceInfo) !void {
-
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(topicBufferPayload);
     mem.secureZero(u8, topicBufferPayload);
@@ -459,7 +451,7 @@ pub fn main() !void {
     cnx.callBack = _external_callback;
 
     // register to all, it may be huge,
-    // but C/Zig handle it for small hubs
+    // but C/Zig handles it :-)
     _ = try cnx.register("#");
 
     while (true) {

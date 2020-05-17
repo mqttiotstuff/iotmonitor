@@ -1,8 +1,9 @@
 
 ## IOTMonitor project
 
-This project is a simple state manager and monitoring system for MQTT based communication devices (IOT). Iotmonitor let you monitor the existing devices, using a config file, with a `zig` process. 
-IotMonitor also record and restore their states, when they reconnect to the broker. It really help to maintain things working, even if they fails.
+This project is a simple state manager and monitoring system for MQTT based communication devices (IOT). Iotmonitor monitor the existing devices, using a config file. 
+
+IotMonitor also record and restore their states as they go and recover. It helps to maintain IOT things working, even if they fails.
 
 Each device has an independent communication message time out, when the device did not reponse until timeout is reached, the iotmonitor publish a specific monitoring failure topic for the device, with the latest contact timestamp
 

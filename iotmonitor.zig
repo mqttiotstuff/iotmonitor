@@ -288,28 +288,33 @@ fn callback(topic: []u8, message: []u8) !void {
                 // iterate on db, on state topic
 
                 const itstorage = try db.iterator();
+                defer itstorage.deinit();
                 itstorage.first();
                 while (itstorage.isValid()) {
                     var storedTopic = itstorage.iterKey();
                     if (storedTopic) |storedTopicValue| {
+                        defer globalAllocator.destroy(storedTopicValue);
                         if (storedTopicValue.len >= topic.len) {
                             const slice = storedTopicValue.*;
                             if (mem.eql(u8, slice[0..topic.len], topic[0..])) {
                                 var stateTopic = itstorage.iterValue();
-                                // try out.print("sending state {} to topic {}\n", .{ stateTopic.?.*, slice });
-                                const topicWithSentinel = try globalAllocator.allocSentinel(u8, storedTopicValue.*.len, 0);
-                                defer globalAllocator.free(topicWithSentinel);
-                                mem.copy(u8, topicWithSentinel[0..], storedTopicValue.*);
+                                if (stateTopic) |stateTopicValue| {
+                                    // try out.print("sending state {} to topic {}\n", .{ stateTopic.?.*, slice });
+                                    defer globalAllocator.destroy(stateTopicValue);
+                                    const topicWithSentinel = try globalAllocator.allocSentinel(u8, storedTopicValue.*.len, 0);
+                                    defer globalAllocator.free(topicWithSentinel);
+                                    mem.copy(u8, topicWithSentinel[0..], storedTopicValue.*);
 
-                                // resend state
-                                try cnx.publish(topicWithSentinel, stateTopic.?.*);
+                                    // resend state
+                                    try cnx.publish(topicWithSentinel, stateTopicValue.*);
+                                }
                             }
                         }
                     }
                     itstorage.next();
                 }
             }
-        }
+        } // hello
         if (try doesTopicBelongTo(topic, watchTopic)) |sub| {
             // trigger the timeout for the iot element
             try deviceInfo.updateNextContact();
@@ -346,9 +351,11 @@ test "read whole database" {
     while (iterator.isValid()) {
         const optReadKey = iterator.iterKey();
         if (optReadKey) |k| {
+            defer globalAllocator.destroy(optReadKey);
             const optReadValue = iterator.iterValue();
             if (optReadValue) |v| {
                 debug.warn("   key :{} value: {}\n", .{ k.*, v.* });
+                defer globalAllocator.destroy(optReadValue);
             }
         }
         iterator.next();

@@ -48,7 +48,7 @@ pub const MqttCnx = struct {
 
         const am = @ptrToInt(message.*.payload);
         const mptr = @intToPtr([*]u8, am);
-        // pass to zig in proper way (slices)
+        // pass to zig in proper way with slices
         self_ctx.callBack(topic[0..tlength], mptr[0..mlength]);
         return 1; // properly handled
     }
@@ -120,7 +120,10 @@ pub const MqttCnx = struct {
             .cleanstart = 0, // only available on V5 +
         };
 
-        if (username.len ==0) { conn_options.username = null; conn_options.password = null; }
+        if (username.len == 0) {
+            conn_options.username = null;
+            conn_options.password = null;
+        }
 
         var self_ptr = try allocator.create(Self);
         self_ptr.handle = handle;

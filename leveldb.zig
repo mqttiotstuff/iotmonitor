@@ -5,7 +5,6 @@ const builtin = @import("builtin");
 const trait = std.meta.trait;
 const debug = std.debug;
 const assert = debug.assert;
-// const cleveldb = @import("c_leveldb.zig");
 const Allocator = mem.Allocator;
 const mem = std.mem;
 
@@ -56,29 +55,21 @@ pub fn ArrSerDeserType(comptime T: type) SerDeserAPI(T, []const T, []T) {
 }
 // need sed deser for storing on disk
 pub fn SerDeserType(comptime T: type) SerDeserAPI(T, T, T) {
-    if (comptime @typeInfo(T) == .Pointer) {
-        @panic("this ser deser type is only for simple types");
+    comptime {
+        if (comptime @typeInfo(T) == .Pointer) {
+            @panic("this ser deser type is only for simple types");
+        }
     }
 
     const MI = struct {
         // default functions when the type is still serializable
         fn noMarshallFn(t: *const T, allocator: *Allocator) []const u8 {
-            if (@typeInfo(T) == .Pointer) {
-                return t.*;
-            }
             return mem.asBytes(t);
         }
 
         // unmarshall must make a copy,
         // because leveldb has its own buffers
         fn noUnMarshallFn(e: []const u8, allocator: *Allocator) *align(1) T {
-            if (@typeInfo(T) == .Pointer) {
-                const ptrContainer = @ptrToInt(&e);
-                const elements = @intToPtr(*align(1) T, ptrContainer);
-                const pNew = allocator.create(T) catch unreachable;
-                pNew.* = elements.*;
-                return pNew;
-            }
             const eptr = @ptrToInt(&e[0]);
             return @intToPtr(*align(1) T, eptr);
         }
@@ -97,13 +88,8 @@ test "use of noMarshallFn" {
     const allocator = &arena.allocator;
     const i: u32 = 12;
     var r = SerDeserType(u32).marshall(&i, allocator);
-    // debug.warn("type address {}, ptr address {} \n", .{ &i, r.ptr });
-    for (r) |b| {
-        //debug.warn("   {}\n", .{b});
-    }
-    // debug.warn("key len :{}\n", .{r.len});
     const ur = SerDeserType(u32).unMarshall(r, allocator);
-    // debug.warn("result of unmarshall: {}\n", .{ur.*});
+    debug.assert(i == ur.*);
 }
 
 // create level db type for single element,
@@ -377,21 +363,27 @@ test "test storing letters" {
 
     _ = try l.open(filename);
 
+    const MAX_ITERATIONS = 10000;
+
     var i: u32 = 0;
-    while (i < 10) {
-        var t = [_]u8{ 65, 65, 65, 65, 65, 65 };
-        var t2 = [_]u8{ 65, 65, 65, 65, 65, 65 };
-        _ = c.sprintf(&t[0], "%d", i);
-        _ = c.sprintf(&t2[0], "%d", i + 1);
-        debug.warn(" {} -> {} \n", .{ t, t2 });
-        try l.put(t[0..], t2[0..]);
-        const opt = try l.get(t[0..]);
+    while (i < MAX_ITERATIONS) {
+        var keyBuffer = [_]u8{ 65, 65, 65, 65, 65, 65 };
+        var valueBuffer = [_]u8{ 65, 65, 65, 65, 65, 65 };
+        _ = c.sprintf(&keyBuffer[0], "%d", i);
+        _ = c.sprintf(&valueBuffer[0], "%d", i + 1);
+        debug.warn(" {} -> {} , key length {}\n", .{ keyBuffer, valueBuffer, keyBuffer.len });
+        try l.put(keyBuffer[0..], valueBuffer[0..]);
+        const opt = try l.get(keyBuffer[0..]);
+        allocator.destroy(opt);
         i += 1;
     }
-    var s = "1AAAAA";
+    var s = "1\x00AAAA";
     const t = mem.span(s);
-    const lecturealea = try l.get(t);
+    debug.warn("test key length : {}\n", .{t[0..].len});
+    const lecturealea = try l.get(t[0..]);
+    debug.assert(lecturealea != null);
     debug.warn("retrieved : {}\n", .{lecturealea});
+    allocator.destroy(lecturealea);
 
     const it = try l.iterator();
     it.first();
@@ -405,12 +397,15 @@ test "test storing letters" {
             if (ovbg) |rv| {
                 debug.warn("  {}  value : {}\n", .{ k.*, rv.* });
             }
+            allocator.destroy(k);
         }
         if (optV) |v| {
             debug.warn(" value for string \"{}\" \n", .{v.*});
+            allocator.destroy(v);
         }
         it.next();
     }
+    it.deinit();
 
     l.close();
 }

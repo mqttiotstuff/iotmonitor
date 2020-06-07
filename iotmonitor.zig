@@ -72,8 +72,8 @@ const DeviceInfo = struct {
     watchTopics: []const u8,
     nextContact: c.time_t,
     timeoutValue: u32 = 30,
-    stateTopics: ?[]const u8,
-    helloTopic: ?[]const u8,
+    stateTopics: ?[]const u8 = null,
+    helloTopic: ?[]const u8 = null,
     allocator: *mem.Allocator,
     fn init(allocator: *mem.Allocator) !*DeviceInfo {
         const device = try allocator.create(DeviceInfo);
@@ -373,13 +373,13 @@ fn publishWatchDog() !void {
     _ = c.sprintf(topicBufferPayload.ptr, "%s/up", MqttConfig.mqttIotmonitorBaseTopic.ptr);
 
     var bufferPayload = try globalAllocator.alloc(u8, 512);
+    defer globalAllocator.free(bufferPayload);
     mem.secureZero(u8, bufferPayload);
     cpt = (cpt + 1) % 1_000_000;
     _ = c.sprintf(bufferPayload.ptr, "%d", cpt);
     const topicloadLength = c.strlen(topicBufferPayload.ptr);
     const payloadLength = c.strlen(bufferPayload.ptr);
     try cnx.publish(topicBufferPayload.ptr, bufferPayload[0..payloadLength]);
-    globalAllocator.free(bufferPayload);
 }
 
 fn publishDeviceTimeOut(device: *DeviceInfo) !void {
@@ -399,9 +399,11 @@ fn publishDeviceTimeOut(device: *DeviceInfo) !void {
 }
 
 pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-    defer arena.deinit();
-    globalAllocator = &arena.allocator;
+
+    // var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
+    // defer arena.deinit();
+    //globalAllocator = &arena.allocator;
+    globalAllocator = std.heap.c_allocator;
 
     alldevices = AllDevices.init(globalAllocator);
 

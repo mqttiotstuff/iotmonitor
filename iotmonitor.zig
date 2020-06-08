@@ -288,6 +288,7 @@ fn callback(topic: []u8, message: []u8) !void {
                 // iterate on db, on state topic
 
                 const itstorage = try db.iterator();
+                defer globalAllocator.destroy(itstorage);
                 defer itstorage.deinit();
                 itstorage.first();
                 while (itstorage.isValid()) {
@@ -345,6 +346,7 @@ test "read whole database" {
     defer db.close();
 
     const iterator = try db.iterator();
+    defer globalAllocator.destroy(iterator);
     defer iterator.deinit();
     debug.warn("Dump the iot database \n", .{});
     iterator.first();
@@ -435,6 +437,7 @@ pub fn main() !void {
 
     // read all elements in database, then redefine the state for all
     const it = try db.iterator();
+    defer globalAllocator.destroy(it);
     defer it.deinit();
 
     it.first();

@@ -180,7 +180,9 @@ pub fn LevelDBHashWithSerialization(
 
             // marshall value
             const marshalledKey = KSerDeser.marshall(&key, self.allocator);
+            defer self.allocator.free(marshalledKey);
             const marshalledValue = VSerDeser.marshall(&value, self.allocator);
+            defer self.allocator.free(marshalledValue);
             cleveldb.leveldb_put(self.leveldbHandle, self.writeOptions, marshalledKey.ptr, marshalledKey.len, marshalledValue.ptr, marshalledValue.len, &err);
         }
 
@@ -190,6 +192,7 @@ pub fn LevelDBHashWithSerialization(
             var read_len: usize = 0;
             var err: [*c]u8 = null;
             const marshalledKey = KSerDeser.marshall(&key, self.allocator);
+            defer self.allocator.free(marshalledKey);
             read = cleveldb.leveldb_get(self.leveldbHandle, self.readOptions, marshalledKey.ptr, marshalledKey.len, &read_len, &err);
 
             if (err != null) {

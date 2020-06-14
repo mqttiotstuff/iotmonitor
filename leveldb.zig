@@ -149,7 +149,23 @@ pub fn LevelDBHashWithSerialization(
         pub fn open(self: *Self, filename: [*c]const u8) !void {
             const options = cleveldb.leveldb_options_create();
             defer cleveldb.leveldb_free(options);
+
+            // defining a small LRU cache,
+            // on level db, initialy initialized to 32Gb with 4096 bock size
+            // because, the key replace, will keep the values until compaction
+            // to full iteration can get all datas and put them into LRU cache
+
+            const cache = cleveldb.leveldb_cache_create_lru(4096);
+            const env = cleveldb.leveldb_create_default_env();
+            cleveldb.leveldb_options_set_cache(options, cache);
             cleveldb.leveldb_options_set_create_if_missing(options, 1);
+            cleveldb.leveldb_options_set_max_open_files(options, 10);
+            cleveldb.leveldb_options_set_block_restart_interval(options, 4);
+            cleveldb.leveldb_options_set_write_buffer_size(options, 1000);
+            cleveldb.leveldb_options_set_env(options, env);
+            cleveldb.leveldb_options_set_info_log(options, null);
+            cleveldb.leveldb_options_set_block_size(options, 1024);
+
             var err: [*c]u8 = null;
             const result = cleveldb.leveldb_open(options, filename, &err);
 
@@ -170,29 +186,29 @@ pub fn LevelDBHashWithSerialization(
 
         pub fn put(self: *Self, key: KIN, value: VIN) !void {
             var err: [*c]u8 = null;
-            if (err != null) {
-                debug.warn("{}", .{"open failed"});
-                defer cleveldb.leveldb_free(err);
-                return error.KEY_WRITE_FAILED;
-            }
             // debug.warn("k size {}\n", .{@sizeOf(K)});
             // debug.warn("array size {}\n", .{value.len});
 
             // marshall value
             const marshalledKey = KSerDeser.marshall(&key, self.allocator);
-            defer self.allocator.free(marshalledKey);
+            // defer self.allocator.free(marshalledKey);
             const marshalledValue = VSerDeser.marshall(&value, self.allocator);
-            defer self.allocator.free(marshalledValue);
+            // defer self.allocator.free(marshalledValue);
             cleveldb.leveldb_put(self.leveldbHandle, self.writeOptions, marshalledKey.ptr, marshalledKey.len, marshalledValue.ptr, marshalledValue.len, &err);
+            if (err != null) {
+                debug.warn("{}", .{"open failed"});
+                defer cleveldb.leveldb_free(err);
+                return error.KEY_WRITE_FAILED;
+            }
         }
 
         // retrieve the content of a key
         pub fn get(self: *Self, key: KIN) !?*align(1) VOUT {
-            var read: ?[*]const u8 = undefined;
+            var read: ?[*]u8 = undefined;
             var read_len: usize = 0;
             var err: [*c]u8 = null;
             const marshalledKey = KSerDeser.marshall(&key, self.allocator);
-            defer self.allocator.free(marshalledKey);
+            // defer self.allocator.free(marshalledKey);
             read = cleveldb.leveldb_get(self.leveldbHandle, self.readOptions, marshalledKey.ptr, marshalledKey.len, &read_len, &err);
 
             if (err != null) {
@@ -204,7 +220,8 @@ pub fn LevelDBHashWithSerialization(
                 debug.warn("key not found \n", .{});
                 return null;
             }
-
+            const torelease = @ptrCast(*c_void, read);
+            defer cleveldb.leveldb_free(torelease);
             // _ = c.printf("returned : %s %d\n", read, read_len);
             const structAddr = @ptrToInt(read);
             var cmsg = @intToPtr([*]u8, structAddr);
@@ -354,11 +371,9 @@ test "test storing ints" {
 }
 
 test "test storing letters" {
-    var filename = "stringstorage\x00";
+    var filename = "stringstoragetest\x00";
 
-    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-    defer arena.deinit();
-    const allocator = &arena.allocator;
+    const allocator = std.heap.c_allocator;
 
     const SS = LevelDBHashArray(u8, u8);
     var l = try SS.init(allocator);
@@ -366,19 +381,23 @@ test "test storing letters" {
 
     _ = try l.open(filename);
 
-    const MAX_ITERATIONS = 10000;
+    const MAX_ITERATIONS = 100_000_000;
 
-    var i: u32 = 0;
+    var i: u64 = 0;
     while (i < MAX_ITERATIONS) {
         var keyBuffer = [_]u8{ 65, 65, 65, 65, 65, 65 };
         var valueBuffer = [_]u8{ 65, 65, 65, 65, 65, 65 };
-        _ = c.sprintf(&keyBuffer[0], "%d", i);
-        _ = c.sprintf(&valueBuffer[0], "%d", i + 1);
-        debug.warn(" {} -> {} , key length {}\n", .{ keyBuffer, valueBuffer, keyBuffer.len });
+        _ = c.sprintf(&keyBuffer[0], "%d", i % 1000);
+        _ = c.sprintf(&valueBuffer[0], "%d", (i + 1) % 1000);
+        // debug.warn(" {} -> {} , key length {}\n", .{ keyBuffer, valueBuffer, keyBuffer.len });
         try l.put(keyBuffer[0..], valueBuffer[0..]);
         const opt = try l.get(keyBuffer[0..]);
-        allocator.destroy(opt);
+        allocator.destroy(opt.?);
         i += 1;
+        // used for reduce pression in test
+        if (i % 100_000 == 0) {
+            _ = c.sleep(2);
+        }
     }
     var s = "1\x00AAAA";
     const t = mem.span(s);
@@ -389,22 +408,24 @@ test "test storing letters" {
     allocator.destroy(lecturealea);
 
     const it = try l.iterator();
+    defer allocator.destroy(it);
+    defer l.deinit();
     it.first();
     while (it.isValid()) {
         const optK = it.iterKey();
         const optV = it.iterValue();
         if (optK) |k| {
+            defer allocator.destroy(k);
             debug.warn("  {}  value : {}\n", .{ k.*, optV.?.* });
             // debug.warn(" key for string \"{}\" \n", .{k.*});
             const ovbg = try l.get(k.*);
             if (ovbg) |rv| {
                 debug.warn("  {}  value : {}\n", .{ k.*, rv.* });
             }
-            allocator.destroy(k);
         }
         if (optV) |v| {
+            defer allocator.destroy(v);
             debug.warn(" value for string \"{}\" \n", .{v.*});
-            allocator.destroy(v);
         }
         it.next();
     }

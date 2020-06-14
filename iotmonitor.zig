@@ -288,6 +288,7 @@ fn callback(topic: []u8, message: []u8) !void {
                 // iterate on db, on state topic
 
                 const itstorage = try db.iterator();
+                // itstorage is an allocated pointer
                 defer globalAllocator.destroy(itstorage);
                 defer itstorage.deinit();
                 itstorage.first();
@@ -401,10 +402,6 @@ fn publishDeviceTimeOut(device: *DeviceInfo) !void {
 }
 
 pub fn main() !void {
-
-    // var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-    // defer arena.deinit();
-    //globalAllocator = &arena.allocator;
     globalAllocator = std.heap.c_allocator;
 
     alldevices = AllDevices.init(globalAllocator);

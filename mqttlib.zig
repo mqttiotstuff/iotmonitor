@@ -30,8 +30,8 @@ pub const MqttCnx = struct {
     }
 
     fn _msgArrived(ctx: ?*c_void, topic: [*c]u8, topic_length: c_int, message: [*c]cmqtt.MQTTClient_message) callconv(.C) c_int {
-        const cpm = @ptrToInt(&message);
-        var cmsg = @intToPtr([*c][*c]cmqtt.MQTTClient_message, cpm);
+        const messagePtrAddress = @ptrToInt(&message);
+        var cmsg = @intToPtr([*c][*c]cmqtt.MQTTClient_message, messagePtrAddress);
         defer cmqtt.MQTTClient_freeMessage(cmsg);
         defer cmqtt.MQTTClient_free(topic);
 

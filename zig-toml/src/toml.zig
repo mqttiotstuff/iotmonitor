@@ -74,7 +74,7 @@ pub const Table = struct {
                 var currentTable: *Table = self;
                 var index: usize = 0;
                 while (index < dotted.len - 1) : (index += 1) {
-                    if (currentTable.children.getValue(indexIdentifier(dotted, index).?)) |table| {
+                    if (currentTable.children.get(indexIdentifier(dotted, index).?)) |table| {
                         currentTable = table;
                     } else {
                         var table = try self.allocator.create(Table);
@@ -89,7 +89,7 @@ pub const Table = struct {
     }
 
     pub fn getKey(self: Self, key: []const u8) ?Value {
-        if (self.keys.getValue(key)) |value| {
+        if (self.keys.get(key)) |value| {
             return value;
         }
         // else {
@@ -105,7 +105,7 @@ pub const Table = struct {
     }
 
     pub fn getTable(self: Self, name: []const u8) ?Table {
-        if (self.children.getValue(name)) |table| {
+        if (self.children.get(name)) |table| {
             return table.*;
         }
         // else {

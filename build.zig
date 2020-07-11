@@ -21,6 +21,7 @@ pub fn build(b: *Builder) void {
 
     exe.linkLibC();
 
+    // static add the paho mqtt library
     exe.addLibPath("paho.mqtt.c/build/output");
     exe.addLibPath("paho.mqtt.c/src");
     exe.addObjectFile("paho.mqtt.c/src/libpaho-mqtt3c.a");

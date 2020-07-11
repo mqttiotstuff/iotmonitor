@@ -140,6 +140,7 @@ pub const MqttCnx = struct {
         return self_ptr;
     }
 
+    // publish a message with default QOS 0
     pub fn publish(self: *Self, topic: [*c]const u8, msg: []const u8) !void {
         return publishWithQos(self, topic, msg, 0);
     }

@@ -101,7 +101,6 @@ const DeviceInfo = struct {
 fn stripLastWildCard(watchValue: []const u8) ![]const u8 {
     assert(watchValue.len > 0);
     if (watchValue[watchValue.len - 1] == '#') {
-        // try out.writeAll("remove the topic prefix \n");
         return watchValue[0 .. watchValue.len - 2];
     }
     return watchValue;

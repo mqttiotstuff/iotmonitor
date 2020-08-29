@@ -285,7 +285,7 @@ fn indexIdentifier(ident: DottedIdentifier, index: usize) ?[]const u8 {
 
 /// This assumes that the starting character aka contents[start] is a '.'
 fn parseDottedIdentifier(allocator: *std.mem.Allocator, contents: []const u8, start: *usize) !DottedIdentifier {
-    var result = DottedIdentifier.init();
+    var result = DottedIdentifier{}; //.init();
     if (start.* >= contents.len) {
         return ParseError.UnexpectedEOF;
     }
@@ -299,7 +299,10 @@ fn parseDottedIdentifier(allocator: *std.mem.Allocator, contents: []const u8, st
             word = try parseIdentifier(contents, start);
         }
         start.* += 1;
-        var node = try result.createNode(word, allocator);
+
+        const node = try allocator.create(DottedIdentifier.Node);
+        node.data = word;
+
         result.append(node);
         if (start.* >= contents.len) {
             break;
@@ -371,7 +374,7 @@ fn convertIdentifierToValue(word: []const u8) !Value {
 }
 
 fn parseArray(allocator: *std.mem.Allocator, contents: []const u8, index: *usize) anyerror!Value {
-    var array = DynamicArray.init();
+    var array = DynamicArray{};
 
     var expectClosing = false;
     var i = index.*;
@@ -404,13 +407,15 @@ fn parseArray(allocator: *std.mem.Allocator, contents: []const u8, index: *usize
             State.Identifier => {
                 var word = try parseIdentifier(contents, &i);
                 var value = try convertIdentifierToValue(word);
-                var node = try array.createNode(value, allocator);
+                const node = try allocator.create(DynamicArray.Node);
+                node.data = value;
                 array.append(node);
             },
             State.String => {
                 var str = try parseString(contents, &i);
                 var value = Value{ .String = str };
-                var node = try array.createNode(value, allocator);
+                const node = try allocator.create(DynamicArray.Node);
+                node.data = value;
                 array.append(node);
             },
             State.Number => {
@@ -420,7 +425,8 @@ fn parseArray(allocator: *std.mem.Allocator, contents: []const u8, index: *usize
                 var word = try parseIdentifier(contents, &i);
                 if (isNumber(word)) {
                     var value = Value{ .Integer = toInteger(word) };
-                    var node = try array.createNode(value, allocator);
+                    const node = try allocator.create(DynamicArray.Node);
+                    node.data = value;
                     array.append(node);
                 } else {
                     return ParseError.InvalidValue;
@@ -429,7 +435,8 @@ fn parseArray(allocator: *std.mem.Allocator, contents: []const u8, index: *usize
             State.Table => {
                 i += 1;
                 var value = try parseArray(allocator, contents, &i);
-                var node = try array.createNode(value, allocator);
+                const node = try allocator.create(DynamicArray.Node);
+                node.data = value;
                 array.append(node);
             },
         }
@@ -468,7 +475,8 @@ fn parseKeyIdentifier(allocator: *std.mem.Allocator, contents: []const u8, index
     if (index.* + 1 < contents.len and contents[index.* + 1] == '.') {
         index.* += 1;
         var dottedResult = try parseDottedIdentifier(allocator, contents, index);
-        var node = try dottedResult.createNode(word, allocator);
+        const node = try allocator.create(DottedIdentifier.Node);
+        node.data = word;
         dottedResult.prepend(node);
         return Key{ .DottedIdent = dottedResult };
     } else {

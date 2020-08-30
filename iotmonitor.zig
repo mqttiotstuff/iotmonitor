@@ -76,7 +76,7 @@ const AdditionalProcessInformationsTag = enum {
 
 const AdditionalProcessInformation = struct {
     // pid is to track the process while running
-    pid: usize = undefined,
+    pid: ?i32 = undefined,
     // process identifier attributed by IOTMonitor, to track existing processes
     processIdentifier: []const u8 = "",
     exec: []const u8 = "",
@@ -158,7 +158,7 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
     if (entry.getKey("exec")) |exec| {
         const execValue = exec.String;
         assert(execValue.len > 0);
-        const execCommand = try allocator.allocSentinel(u8, execValue.len, 0);
+        const execCommand = try allocator.allocSentinel(u8, execValue.len, null, 0);
         mem.copy(u8, execCommand, execValue);
         device.associatedProcessInformation = AdditionalProcessInformation{ .exec = execCommand };
     }
@@ -362,13 +362,14 @@ fn callback(topic: []u8, message: []u8) !void {
     }
 }
 
+// global types
 const AllDevices = std.StringHashMap(*MonitoringInfo);
-
-var alldevices: AllDevices = undefined;
 const DiskHash = leveldb.LevelDBHashArray(u8, u8);
-var db: *DiskHash = undefined;
 
+// global variables
 var globalAllocator: *mem.Allocator = undefined;
+var alldevices: AllDevices = undefined;
+var db: *DiskHash = undefined;
 
 test "read whole database" {
     var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
@@ -408,41 +409,75 @@ const LAUNCH_COMMAND_LINE_BUFFER_SIZE = 16 * 1024;
 
 fn launchProcess(monitoringInfo: *MonitoringInfo) !void {
     assert(monitoringInfo.associatedProcessInformation != null);
+    const associatedProcessInformation = monitoringInfo.*.associatedProcessInformation.?.*;
     const pid = try os.fork();
     if (pid == 0) {
         // detach from parent, this permit the process to live independently from
         // its parent
         _ = c.setsid();
 
-        const buffer = try globalAllocator.alloc(u8, MAGIC_BUFFER_SIZE);
-        c.sprintf(buffer, MAGICPROCSSHEADER + "%s");
+        const bufferMagic = try globalAllocator.allocSentinel(u8, MAGIC_BUFFER_SIZE, 0);
+        defer globalAllocator.free(bufferMagic);
+        _ = c.sprintf(bufferMagic.ptr, "%s%s", MAGICPROCSSHEADER, monitoringInfo.name.ptr);
 
-        const argv = [_][]const u8{ "/bin/bash", "-c", "echo $IOTMONITORMAGIC; sleep 20 && echo END" };
+        const commandLineBuffer = try globalAllocator.allocSentinel(u8, LAUNCH_COMMAND_LINE_BUFFER_SIZE, 0);
+        defer globalAllocator.free(commandLineBuffer);
 
-        var m = std.BufMap.init(allocator);
-        try m.set("DUMMY_VARIABLE", "VALUE");
+        const exec = associatedProcessInformation.exec;
+        _ = c.sprintf(commandLineBuffer.ptr, "echo %s;%s;echo END", bufferMagic.ptr, exec.ptr);
+
+        // launch here a bash to have a silent process identification
+        const argv = [_][]const u8{
+            "/bin/bash",
+            "-c",
+            commandLineBuffer[0..c.strlen(commandLineBuffer)],
+        };
+
+        var m = std.BufMap.init(globalAllocator);
+        // may add additional information about the process ...
+        try m.set("IOTMONITORMAGIC", bufferMagic[0..c.strlen(bufferMagic)]);
+
         // execute the process
-        const err = os.execvpe(allocator, &argv, &m);
+        const err = os.execvpe(globalAllocator, &argv, &m);
         // if  succeeded the process is replaced
         // otherwise this is an error
         unreachable;
     } else {
-        monitoringInfo.associatedProcessInformation.pid = pid;
+        try out.print("process launched, pid : {}\n", .{pid});
+        monitoringInfo.*.associatedProcessInformation.?.pid = pid;
     }
 }
 
-test "testcompile" {
+test "test_launch_process" {
+    globalAllocator = std.heap.c_allocator;
+    alldevices = AllDevices.init(globalAllocator);
+
+    var processInfo = AdditionalProcessInformation{
+        .exec = "sleep 20",
+        .pid = undefined,
+    };
     var d = MonitoringInfo{
         .timeoutValue = 1,
+        .name = "MYPROCESS",
         .watchTopics = "",
         .nextContact = undefined,
         .allocator = undefined,
         .helloTopic = undefined,
         .stateTopics = undefined,
-        .associatedProcessInformation = undefined,
+        .associatedProcessInformation = &processInfo,
     };
 
     try launchProcess(&d);
+    const pid: i32 = d.associatedProcessInformation.?.*.pid.?;
+    debug.warn("pid launched : {}\n", .{pid});
+
+    try alldevices.put(d.name, &d);
+
+    var p: processlib.ProcessInformation = .{};
+    const processFound = try processlib.getProcessInformations(pid, &p);
+    assert(processFound);
+
+    handleCheckAgent(&p);
 }
 
 fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {
@@ -450,16 +485,29 @@ fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {
     // iterate over the devices
     var it = alldevices.iterator();
 
-    while (it.next()) |device| {
-        if (!device.associatedProcessInformation) {
+    while (it.next()) |e| {
+        const device = e.value;
+        // not on optional
+        if (device.associatedProcessInformation) |infos| {
+            // check if process has the magic Key
+            var itCmdLine = processInformation.iterator();
+            while (itCmdLine.next()) |a| {
+                _ = c.printf("look in %s\n", a.ptr);
+                const p = c.strstr(a.ptr, MAGICPROCSSHEADER);
+                _ = c.printf("found %s\n", p);
+                if (p != null) {
+                    // found in arguments
+                    @panic("found");
+                }
+            }
+        } else {
             continue;
         }
-        // check if process has the magic Key
-        const infos = device.associatedProcessInformation.?;
     }
 }
 
 fn checkProcessesAndRunMissing() !void {
+    // list all process for wrapping
     processlib.listProcesses(handleCheckAgent);
 }
 
@@ -506,9 +554,7 @@ fn publishDeviceTimeOut(device: *MonitoringInfo) !void {
 // main procedure
 pub fn main() !void {
     globalAllocator = std.heap.c_allocator;
-
     alldevices = AllDevices.init(globalAllocator);
-
     const configurationFile = "config.toml";
     try out.writeAll("Reading the config file\n");
 

@@ -9,7 +9,7 @@ const File = fs.File;
 const Dir = fs.Dir;
 const fmt = std.fmt;
 
-const ProcessInformation = struct {
+pub const ProcessInformation = struct {
     pid: u64 = 0,
     // 8k for buffer ? is it enought ?
     commandlinebuffer: [8192]u8 = [_]u8{'\x00'} ** 8192,
@@ -42,7 +42,7 @@ const ProcessInformation = struct {
 // get process information, for a specific PID
 // return false if the process does not exists,
 // return true and the processInfo is populated with the command line options
-pub fn getProcessInformations(pid: u64, processInfo: *ProcessInformation) !bool {
+pub fn getProcessInformations(pid: i32, processInfo: *ProcessInformation) !bool {
     var buffer = [_]u8{'\x00'} ** 8192;
 
     const options = Dir.OpenDirOptions{

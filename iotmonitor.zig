@@ -8,18 +8,21 @@ const std = @import("std");
 const debug = std.debug;
 const assert = debug.assert;
 const mem = std.mem;
-
-const leveldb = @import("leveldb.zig");
-const mqtt = @import("mqttlib.zig");
+const os = std.os;
 
 // used for sleep, and other, it may be removed
 // to relax libC needs
 const c = @cImport({
     @cInclude("stdio.h");
     @cInclude("unistd.h");
+    @cInclude("signal.h");
     @cInclude("time.h");
     @cInclude("string.h");
 });
+
+const leveldb = @import("leveldb.zig");
+const mqtt = @import("mqttlib.zig");
+const processlib = @import("processlib.zig");
 
 const toml = @import("toml");
 
@@ -67,7 +70,20 @@ test "no match 2" {
     assert(a == null);
 }
 
-const DeviceInfo = struct {
+const AdditionalProcessInformationsTag = enum {
+    True, False
+};
+
+const AdditionalProcessInformation = struct {
+    // pid is to track the process while running
+    pid: usize = undefined,
+    // process identifier attributed by IOTMonitor, to track existing processes
+    processIdentifier: []const u8 = "",
+    exec: []const u8 = "",
+};
+
+const MonitoringInfo = struct {
+    // name of the device
     name: []const u8 = "",
     watchTopics: []const u8,
     nextContact: c.time_t,
@@ -75,21 +91,24 @@ const DeviceInfo = struct {
     stateTopics: ?[]const u8 = null,
     helloTopic: ?[]const u8 = null,
     allocator: *mem.Allocator,
-    fn init(allocator: *mem.Allocator) !*DeviceInfo {
-        const device = try allocator.create(DeviceInfo);
+    // in case of process informations,
+    associatedProcessInformation: ?AdditionalProcessInformation,
+
+    fn init(allocator: *mem.Allocator) !*MonitoringInfo {
+        const device = try allocator.create(MonitoringInfo);
         device.allocator = allocator;
         return device;
     }
-    fn deinit(self: *DeviceInfo) void {
+    fn deinit(self: *MonitoringInfo) void {
         self.allocator.destroy(self);
     }
 
-    fn updateNextContact(device: *DeviceInfo) !void {
+    fn updateNextContact(device: *MonitoringInfo) !void {
         _ = c.time(&device.*.nextContact);
         device.*.nextContact = device.*.nextContact + @intCast(c_long, device.*.timeoutValue);
     }
 
-    fn hasExpired(device: *DeviceInfo) !bool {
+    fn hasExpired(device: *MonitoringInfo) !bool {
         var currentTime: c.time_t = undefined;
         _ = c.time(&currentTime);
         const diff = c.difftime(currentTime, device.*.nextContact);
@@ -106,7 +125,7 @@ fn stripLastWildCard(watchValue: []const u8) ![]const u8 {
     return watchValue;
 }
 test "test update time" {
-    var d = DeviceInfo{
+    var d = MonitoringInfo{
         .timeoutValue = 1,
         .watchTopics = "",
         .nextContact = undefined,
@@ -127,13 +146,21 @@ test "test update time" {
 
 // parse the device info,
 // device must have a watch topics
-fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table) !*DeviceInfo {
-    const device = try DeviceInfo.init(allocator);
+fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table) !*MonitoringInfo {
+    const device = try MonitoringInfo.init(allocator);
     errdefer device.deinit();
     const allocName = try allocator.alloc(u8, name.*.len + 1);
     mem.secureZero(u8, allocName);
     std.mem.copy(u8, allocName, name.*);
     device.name = allocName;
+
+    if (entry.getKey("exec")) |exec| {
+        const execValue = exec.String;
+        assert(execValue.len > 0);
+        const execCommand = try allocator.allocSentinel(u8, execValue.len, 0);
+        mem.copy(u8, execCommand, execValue);
+        device.associatedProcessInformation = AdditionalProcessInformation{ .exec = execCommand };
+    }
 
     if (entry.getKey("watchTopics")) |watch| {
         // there may have a wildcard at the end
@@ -194,8 +221,11 @@ fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename
     var it = config.children.iterator();
     while (it.next()) |e| {
         if (e.key.len >= 7) {
-            const isEqual = mem.eql(u8, e.key[0..7], "device_");
-            if (isEqual) {
+            const DEVICEPREFIX = "device_";
+            const AGENTPREFIX = "agent_";
+            const isDevice = mem.eql(u8, e.key[0..DEVICEPREFIX.len], DEVICEPREFIX);
+            const isAgent = mem.eql(u8, e.key[0..AGENTPREFIX.len], AGENTPREFIX);
+            if (isDevice or isAgent) {
                 if (Verbose) {
                     try out.print("device found :{}\n", .{e.key});
                 }
@@ -247,7 +277,7 @@ fn _external_callback(topic: []u8, message: []u8) void {
     };
 }
 
-// implementation that return an error
+// MQTT Callback implementation
 fn callback(topic: []u8, message: []u8) !void {
 
     // MQTT callback
@@ -260,6 +290,8 @@ fn callback(topic: []u8, message: []u8) !void {
 
     // look for all devices
     var iterator = alldevices.iterator();
+
+    // device loop
     while (iterator.next()) |e| {
         const deviceInfo = e.value;
         if (Verbose) {
@@ -329,7 +361,7 @@ fn callback(topic: []u8, message: []u8) !void {
     }
 }
 
-const AllDevices = std.StringHashMap(*DeviceInfo);
+const AllDevices = std.StringHashMap(*MonitoringInfo);
 
 var alldevices: AllDevices = undefined;
 const DiskHash = leveldb.LevelDBHashArray(u8, u8);
@@ -367,9 +399,61 @@ test "read whole database" {
 }
 // main connection for subscription
 var cnx: *mqtt.MqttCnx = undefined;
-
 var cpt: u32 = 0;
 
+const MAGICPROCSSHEADER = "IOTMONITORMAGIC_";
+const MAGIC_BUFFER_SIZE = 16 * 1024;
+const LAUNCH_COMMAND_LINE_BUFFER_SIZE = 16 * 1024;
+
+fn launchProcess(monitoringInfo: *MonitoringInfo) !void {
+    assert(monitoringInfo.associatedProcessInformation);
+    const pid = try os.fork();
+    if (pid == 0) {
+        // detach from parent, this permit the process to live independently from
+        // its parent
+        _ = c.setsid();
+
+        const buffer = try globalAllocator.alloc(u8, MAGIC_BUFFER_SIZE);
+        c.sprintf(buffer, MAGICPROCSSHEADER + "%s");
+
+        const argv = [_][]const u8{ "/bin/bash", "-c", "echo $IOTMONITORMAGIC; sleep 20 && echo END" };
+
+        var m = std.BufMap.init(allocator);
+        try m.set("DUMMY_VARIABLE", "VALUE");
+        // execute the process
+        const err = os.execvpe(allocator, &argv, &m);
+        // if  succeeded the process is replaced
+        // otherwise this is an error
+        unreachable;
+    } else {
+        monitoringInfo.associatedProcessInformation.pid = pid;
+    }
+}
+
+test "testcompile" {
+    launchProcess(null);
+}
+
+fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {
+
+    // iterate over the devices
+    var it = alldevices.iterator();
+
+    while (it.next()) |device| {
+        if (!device.associatedProcessInformation) {
+            continue;
+        }
+        // check if process has the magic Key
+        const infos = device.associatedProcessInformation.?;
+    }
+}
+
+fn checkProcessesAndRunMissing() !void {
+    processlib.listProcesses(handleCheckAgent);
+}
+
+// this function publish a watchdog for the iotmonitor process
+// this permit to check if the monitoring is up
 fn publishWatchDog() !void {
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(topicBufferPayload);
@@ -388,7 +472,9 @@ fn publishWatchDog() !void {
     };
 }
 
-fn publishDeviceTimeOut(device: *DeviceInfo) !void {
+// this function pulish a mqtt message for a device that is not publishing
+// it mqtt messages
+fn publishDeviceTimeOut(device: *MonitoringInfo) !void {
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(topicBufferPayload);
     mem.secureZero(u8, topicBufferPayload);
@@ -406,6 +492,7 @@ fn publishDeviceTimeOut(device: *DeviceInfo) !void {
     };
 }
 
+// main procedure
 pub fn main() !void {
     globalAllocator = std.heap.c_allocator;
 
@@ -437,6 +524,9 @@ pub fn main() !void {
 
     cnx = try mqtt.MqttCnx.init(globalAllocator, serverAddress, clientid, userName, password);
 
+    try out.print("checking running monitored processes\n", .{});
+
+    try out.print("restoring saved states topics ... \n", .{});
     // read all elements in database, then redefine the state for all
     const it = try db.iterator();
     defer globalAllocator.destroy(it);
@@ -462,11 +552,10 @@ pub fn main() !void {
         }
         it.next();
     }
-
+    try out.print(".. state restoring done, listening mqtt topics\n", .{});
     cnx.callBack = _external_callback;
 
-    // register to all, it may be huge,
-    // but C/Zig handles it :-)
+    // register to all, it may be huge, and probably not scaling
     _ = try cnx.register("#");
 
     while (true) {

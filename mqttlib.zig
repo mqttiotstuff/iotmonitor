@@ -175,7 +175,10 @@ pub const MqttCnx = struct {
         defer self.allocator.destroy(token);
 
         const resultPublish = cmqtt.MQTTClient_publishMessage(self.handle, topic, &mqttmessage, token);
-        if (resultPublish != 0) return error.MQTTPublishError;
+        if (resultPublish != 0) {
+            std.debug.warn("publish mqtt message returned {}\n", .{resultPublish});
+            return error.MQTTPublishError;
+        }
 
         // wait for sent
 

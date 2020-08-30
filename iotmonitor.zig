@@ -276,7 +276,9 @@ fn callback(topic: []u8, message: []u8) !void {
                     try out.print("sub topic to store value :{}, in {}\n", .{ message, topic });
                     try out.print("length {}\n", .{topic.len});
                 }
-                try db.put(topic, message);
+                db.put(topic, message) catch |errStorage| {
+                    debug.warn("fail to store message {} for topic {}, on databasei with error {} \n", .{ message, topic, errStorage });
+                };
             }
         }
         if (helloTopic) |hello| {
@@ -381,7 +383,9 @@ fn publishWatchDog() !void {
     _ = c.sprintf(bufferPayload.ptr, "%d", cpt);
     const topicloadLength = c.strlen(topicBufferPayload.ptr);
     const payloadLength = c.strlen(bufferPayload.ptr);
-    try cnx.publish(topicBufferPayload.ptr, bufferPayload[0..payloadLength]);
+    cnx.publish(topicBufferPayload.ptr, bufferPayload[0..payloadLength]) catch {
+        std.debug.warn("cannot publish watchdog message, will retryi \n", .{});
+    };
 }
 
 fn publishDeviceTimeOut(device: *DeviceInfo) !void {
@@ -397,7 +401,9 @@ fn publishDeviceTimeOut(device: *DeviceInfo) !void {
     _ = c.sprintf(bufferPayload.ptr, "%d", device.nextContact);
     const payloadLen = c.strlen(bufferPayload.ptr);
 
-    try cnx.publish(topicBufferPayload.ptr, bufferPayload[0..payloadLen]);
+    cnx.publish(topicBufferPayload.ptr, bufferPayload[0..payloadLen]) catch {
+        std.debug.warn("cannot publish timeout message for device {} , will retry \n", .{device.name});
+    };
 }
 
 pub fn main() !void {
@@ -450,6 +456,7 @@ pub fn main() !void {
                 defer globalAllocator.free(topicWithSentinel);
                 mem.copy(u8, topicWithSentinel[0..], subject.*);
 
+                // if failed, stop the process
                 try cnx.publish(topicWithSentinel, value.*);
             }
         }

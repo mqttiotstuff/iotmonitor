@@ -405,8 +405,9 @@ test "test storing letters" {
     const lecturealea = try l.get(t[0..]);
     debug.assert(lecturealea != null);
     debug.warn("retrieved : {}\n", .{lecturealea});
-    allocator.destroy(lecturealea);
-
+    if (lecturealea) |value| {
+        allocator.destroy(value);
+    }
     const it = try l.iterator();
     defer allocator.destroy(it);
     defer l.deinit();

@@ -92,7 +92,7 @@ const MonitoringInfo = struct {
     helloTopic: ?[]const u8 = null,
     allocator: *mem.Allocator,
     // in case of process informations,
-    associatedProcessInformation: ?AdditionalProcessInformation,
+    associatedProcessInformation: ?*AdditionalProcessInformation = null,
 
     fn init(allocator: *mem.Allocator) !*MonitoringInfo {
         const device = try allocator.create(MonitoringInfo);
@@ -132,6 +132,7 @@ test "test update time" {
         .allocator = undefined,
         .helloTopic = undefined,
         .stateTopics = undefined,
+        .associatedProcessInformation = undefined,
     };
     try d.updateNextContact();
     _ = c.sleep(3);
@@ -387,11 +388,11 @@ test "read whole database" {
     while (iterator.isValid()) {
         const optReadKey = iterator.iterKey();
         if (optReadKey) |k| {
-            defer globalAllocator.destroy(optReadKey);
+            defer globalAllocator.destroy(k);
             const optReadValue = iterator.iterValue();
             if (optReadValue) |v| {
                 debug.warn("   key :{} value: {}\n", .{ k.*, v.* });
-                defer globalAllocator.destroy(optReadValue);
+                defer globalAllocator.destroy(v);
             }
         }
         iterator.next();
@@ -406,7 +407,7 @@ const MAGIC_BUFFER_SIZE = 16 * 1024;
 const LAUNCH_COMMAND_LINE_BUFFER_SIZE = 16 * 1024;
 
 fn launchProcess(monitoringInfo: *MonitoringInfo) !void {
-    assert(monitoringInfo.associatedProcessInformation);
+    assert(monitoringInfo.associatedProcessInformation != null);
     const pid = try os.fork();
     if (pid == 0) {
         // detach from parent, this permit the process to live independently from
@@ -431,7 +432,17 @@ fn launchProcess(monitoringInfo: *MonitoringInfo) !void {
 }
 
 test "testcompile" {
-    launchProcess(null);
+    var d = MonitoringInfo{
+        .timeoutValue = 1,
+        .watchTopics = "",
+        .nextContact = undefined,
+        .allocator = undefined,
+        .helloTopic = undefined,
+        .stateTopics = undefined,
+        .associatedProcessInformation = undefined,
+    };
+
+    try launchProcess(&d);
 }
 
 fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {

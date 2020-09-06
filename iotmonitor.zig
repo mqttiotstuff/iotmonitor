@@ -136,13 +136,13 @@ test "test update time" {
     };
     try d.updateNextContact();
     _ = c.sleep(3);
-    std.debug.assert(try d.hasExpired());
+    debug.assert(try d.hasExpired());
 
     d.timeoutValue = 20;
     try d.updateNextContact();
 
     _ = c.sleep(3);
-    std.debug.assert(!try d.hasExpired());
+    debug.assert(!try d.hasExpired());
 }
 
 // parse the device info,
@@ -477,7 +477,7 @@ test "test_launch_process" {
     const processFound = try processlib.getProcessInformations(pid, &p);
     assert(processFound);
 
-    handleCheckAgent(&p);
+    try processlib.listProcesses(handleCheckAgent);
 }
 
 fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {
@@ -497,8 +497,11 @@ fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {
                 _ = c.printf("found %s\n", p);
                 if (p != null) {
                     // found in arguments
-                    @panic("found");
+                    infos.pid = processInformation.*.pid;
+                    _ = c.printf("process is monitored\n");
+                    break;
                 }
+                _ = c.printf("next ..\n");
             }
         } else {
             continue;
@@ -522,6 +525,8 @@ fn publishWatchDog() !void {
     var bufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(bufferPayload);
     mem.secureZero(u8, bufferPayload);
+    cpt = (cpt + 1) % 1_000_000;
+    _ = c.sprintf(bufferPayload.ptr, "%d", cpt);
     cpt = (cpt + 1) % 1_000_000;
     _ = c.sprintf(bufferPayload.ptr, "%d", cpt);
     const topicloadLength = c.strlen(topicBufferPayload.ptr);
@@ -621,11 +626,8 @@ pub fn main() !void {
 
         var iterator = alldevices.iterator();
         while (iterator.next()) |e| {
-            const deviceInfo = e.value;
-            if (try deviceInfo.hasExpired()) {
-                // publish message
-                try publishDeviceTimeOut(deviceInfo);
-            }
+            // publish message
+            try publishDeviceTimeOut(deviceInfo);
         }
     }
 

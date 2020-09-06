@@ -10,7 +10,7 @@ const Dir = fs.Dir;
 const fmt = std.fmt;
 
 pub const ProcessInformation = struct {
-    pid: u64 = 0,
+    pid: i32 = 0,
     // 8k for buffer ? is it enought ?
     commandlinebuffer: [8192]u8 = [_]u8{'\x00'} ** 8192,
     commandlinebuffer_size: u16 = 0,
@@ -65,6 +65,8 @@ pub fn getProcessInformations(pid: i32, processInfo: *ProcessInformation) !bool 
     const readSize = try commandLineFile.pread(processInfo.commandlinebuffer[0..], 0);
     processInfo.commandlinebuffer_size = @intCast(u16, readSize);
 
+    processInfo.*.pid = pid;
+
     return true;
 }
 
@@ -102,7 +104,7 @@ pub fn listProcesses(callback: ProcessInformationCallback) !void {
             continue;
         }
 
-        const pid = try fmt.parseInt(u64, f.name, 10);
+        const pid = try fmt.parseInt(i32, f.name, 10);
         var pi = ProcessInformation{};
         const successGetInformations = try getProcessInformations(pid, &pi);
         if (successGetInformations and pi.commandlinebuffer_size > 0) {

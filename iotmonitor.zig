@@ -682,7 +682,10 @@ pub fn main() !void {
         while (iterator.next()) |e| {
             // publish message
             const deviceInfo = e.value;
-            try publishDeviceTimeOut(deviceInfo);
+            const hasExpired = try deviceInfo.hasExpired();
+            if (hasExpired) {
+                try publishDeviceTimeOut(deviceInfo);
+            }
         }
     }
 

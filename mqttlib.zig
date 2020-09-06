@@ -27,6 +27,7 @@ pub const MqttCnx = struct {
 
     fn _connLost(ctx: ?*c_void, m: [*c]u8) callconv(.C) void {
         //        const self : *MqttCnx = @ptrCast(*MqttCnx,ctx);
+        _ = c.printf("connection lost");
     }
 
     fn _msgArrived(ctx: ?*c_void, topic: [*c]u8, topic_length: c_int, message: [*c]cmqtt.MQTTClient_message) callconv(.C) c_int {
@@ -37,8 +38,6 @@ pub const MqttCnx = struct {
 
         // unsafe conversion
         const self_ctx = @intToPtr(*Self, @ptrToInt(ctx));
-
-        // _ = c.printf("received %s \n", topic);
 
         // paho always return a 0 in topic_length, we must then compute it
         // _ = c.printf("topic length is %d \n", topic_length);

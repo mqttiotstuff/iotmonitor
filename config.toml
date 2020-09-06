@@ -10,7 +10,7 @@ watchTimeOut=2
 watchTopics="home/agents/nodered/watchdog"
 
 [agent_switchcontrol]
-exec=
-watchTopics=""
-watchTimeOut=
+exec="sleep 100"
+watchTopics="home/agents"
+;watchTimeOut=
 

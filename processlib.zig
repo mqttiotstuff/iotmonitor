@@ -109,7 +109,7 @@ pub fn listProcesses(callback: ProcessInformationCallback) !void {
         const successGetInformations = try getProcessInformations(pid, &pi);
         if (successGetInformations and pi.commandlinebuffer_size > 0) {
             callback(&pi);
-            debug.warn(" {}: {} \n", .{ pid, pi.commandlinebuffer[0..pi.commandlinebuffer_size] });
+            // debug.warn(" {}: {} \n", .{ pid, pi.commandlinebuffer[0..pi.commandlinebuffer_size] });
         }
         // try opening the commandline file
     }

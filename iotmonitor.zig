@@ -78,7 +78,7 @@ const AdditionalProcessInformation = struct {
     // pid is to track the process while running
     pid: ?i32 = undefined,
     // process identifier attributed by IOTMonitor, to track existing processes
-    processIdentifier: []const u8 = "",
+    // processIdentifier: []const u8 = "",
     exec: []const u8 = "",
 };
 
@@ -154,13 +154,17 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
     mem.secureZero(u8, allocName);
     std.mem.copy(u8, allocName, name.*);
     device.name = allocName;
+    device.associatedProcessInformation = null;
 
     if (entry.getKey("exec")) |exec| {
         const execValue = exec.String;
         assert(execValue.len > 0);
-        const execCommand = try allocator.allocSentinel(u8, execValue.len, null, 0);
+        const execCommand = try allocator.allocSentinel(u8, execValue.len, 0);
         mem.copy(u8, execCommand, execValue);
-        device.associatedProcessInformation = AdditionalProcessInformation{ .exec = execCommand };
+        const additionalStructure = try allocator.create(AdditionalProcessInformation);
+        additionalStructure.exec = execCommand;
+        additionalStructure.pid = null;
+        device.associatedProcessInformation = additionalStructure;
     }
 
     if (entry.getKey("watchTopics")) |watch| {
@@ -467,41 +471,55 @@ test "test_launch_process" {
         .associatedProcessInformation = &processInfo,
     };
 
-    try launchProcess(&d);
-    const pid: i32 = d.associatedProcessInformation.?.*.pid.?;
-    debug.warn("pid launched : {}\n", .{pid});
+    // try launchProcess(&d);
+    // const pid: i32 = d.associatedProcessInformation.?.*.pid.?;
+    // debug.warn("pid launched : {}\n", .{pid});
 
     try alldevices.put(d.name, &d);
 
-    var p: processlib.ProcessInformation = .{};
-    const processFound = try processlib.getProcessInformations(pid, &p);
-    assert(processFound);
+    // var p: processlib.ProcessInformation = .{};
+    // const processFound = try processlib.getProcessInformations(pid, &p);
+    // assert(processFound);
 
     try processlib.listProcesses(handleCheckAgent);
 }
 
 fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {
-
-    // iterate over the devices
+    // iterate over the devices, to check which device belong to this process
+    // information
     var it = alldevices.iterator();
 
-    while (it.next()) |e| {
-        const device = e.value;
+    while (it.next()) |deviceInfo| {
+        const device = deviceInfo.value;
         // not on optional
         if (device.associatedProcessInformation) |infos| {
             // check if process has the magic Key
             var itCmdLine = processInformation.iterator();
             while (itCmdLine.next()) |a| {
-                _ = c.printf("look in %s\n", a.ptr);
-                const p = c.strstr(a.ptr, MAGICPROCSSHEADER);
-                _ = c.printf("found %s\n", p);
+                if (Verbose) {
+                    out.print("look in {}\n", .{a.ptr}) catch unreachable;
+                }
+
+                const bufferMagic = globalAllocator.allocSentinel(u8, MAGIC_BUFFER_SIZE, 0) catch unreachable;
+                defer globalAllocator.free(bufferMagic);
+                _ = c.sprintf(bufferMagic.ptr, "%s%s", MAGICPROCSSHEADER, device.name.ptr);
+
+                const p = c.strstr(a.ptr, bufferMagic.ptr);
+                if (Verbose) {
+                    out.print("found {}\n", .{p}) catch unreachable;
+                }
                 if (p != null) {
-                    // found in arguments
-                    infos.pid = processInformation.*.pid;
-                    _ = c.printf("process is monitored\n");
+                    // found in arguments, remember the pid
+                    // of the process
+                    infos.*.pid = processInformation.*.pid;
+                    if (Verbose) {
+                        out.print("process {} is monitored pid found\n", .{infos.pid}) catch unreachable;
+                    }
                     break;
                 }
-                _ = c.printf("next ..\n");
+                if (Verbose) {
+                    out.writeAll("next ..\n") catch unreachable;
+                }
             }
         } else {
             continue;
@@ -509,9 +527,41 @@ fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {
     }
 }
 
+fn runAllMissings() !void {
+
+    // once all the process have been browsed,
+    // run all missing processes
+    var it = alldevices.iterator();
+    while (it.next()) |deviceinfo| {
+        const device = deviceinfo.value;
+        if (device.associatedProcessInformation) |processinfo| {
+            // this is a process monitored
+            if (processinfo.*.pid == null) {
+                out.print("running ...{} \n", .{device.name}) catch unreachable;
+                // no pid associated to the info
+                //
+                launchProcess(device) catch {
+                    @panic("fail to run process");
+                };
+            }
+        }
+    }
+}
+
 fn checkProcessesAndRunMissing() !void {
+
+    // RAZ pid infos
+    var it = alldevices.iterator();
+
+    while (it.next()) |deviceInfo| {
+        const device = deviceInfo.value;
+        if (device.associatedProcessInformation) |infos| {
+            infos.pid = null;
+        }
+    }
     // list all process for wrapping
-    processlib.listProcesses(handleCheckAgent);
+    try processlib.listProcesses(handleCheckAgent);
+    try runAllMissings();
 }
 
 // this function publish a watchdog for the iotmonitor process
@@ -588,6 +638,8 @@ pub fn main() !void {
 
     try out.print("checking running monitored processes\n", .{});
 
+    try checkProcessesAndRunMissing();
+
     try out.print("restoring saved states topics ... \n", .{});
     // read all elements in database, then redefine the state for all
     const it = try db.iterator();
@@ -622,16 +674,18 @@ pub fn main() !void {
 
     while (true) {
         _ = c.sleep(1); // in seconds
+
+        try checkProcessesAndRunMissing();
         try publishWatchDog();
 
         var iterator = alldevices.iterator();
         while (iterator.next()) |e| {
             // publish message
+            const deviceInfo = e.value;
             try publishDeviceTimeOut(deviceInfo);
         }
     }
 
     debug.warn("ended", .{});
-
     return;
 }

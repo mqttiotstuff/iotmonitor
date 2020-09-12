@@ -97,6 +97,10 @@ const MonitoringInfo = struct {
     fn init(allocator: *mem.Allocator) !*MonitoringInfo {
         const device = try allocator.create(MonitoringInfo);
         device.allocator = allocator;
+        device.stateTopics = null;
+        device.helloTopic = null;
+        device.associatedProcessInformation = null;
+
         return device;
     }
     fn deinit(self: *MonitoringInfo) void {
@@ -154,7 +158,6 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
     mem.secureZero(u8, allocName);
     std.mem.copy(u8, allocName, name.*);
     device.name = allocName;
-    device.associatedProcessInformation = null;
 
     if (entry.getKey("exec")) |exec| {
         const execValue = exec.String;
@@ -234,7 +237,9 @@ fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename
                 if (Verbose) {
                     try out.print("device found :{}\n", .{e.key});
                 }
-                const dev = try parseDevice(allocator, &e.key[7..], e.value);
+                var prefixlen = AGENTPREFIX.len;
+                if (isDevice) prefixlen = DEVICEPREFIX.len;
+                const dev = try parseDevice(allocator, &e.key[prefixlen..], e.value);
                 if (Verbose) {
                     try out.print("add {} to device list, with watch {} and state {} \n", .{ dev.name, dev.watchTopics, dev.stateTopics });
                 }

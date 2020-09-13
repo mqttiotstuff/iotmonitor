@@ -22,12 +22,12 @@ parts:
     plugin: make
     source-type: git
     source: https://github.com/frett27/iotmonitor.git
+    source-branch: develop
     build-snaps: [zig/latest/edge]
-    build-packages: [make, libleveldb-dev]
-    stage-packages: [libleveldbld]
+    build-packages: [build-essential, make, libleveldb-dev]
+    stage-packages: [libleveldb-dev]
 
 apps:
   iotmonitor:
     command: iotmonitor
-    deamon: simple
 

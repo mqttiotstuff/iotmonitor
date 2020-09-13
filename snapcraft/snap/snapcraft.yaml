@@ -24,10 +24,11 @@ parts:
     source: https://github.com/frett27/iotmonitor.git
     source-branch: develop
     build-snaps: [zig/latest/edge]
-    build-packages: [build-essential, make, libleveldb-dev]
+    build-packages: [build-essential, make, cmake, libleveldb-dev]
     stage-packages: [libleveldb-dev]
 
 apps:
   iotmonitor:
-    command: iotmonitor
+    command: bin/iotmonitor
+
 

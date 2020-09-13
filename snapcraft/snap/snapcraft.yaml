@@ -1,0 +1,33 @@
+name: iotmonitor
+base: core18
+version: '0.2+git'
+summary: Monitor MQTT IOT devices or agents to make them run 
+description: |
+  IotMonitor solve the "always up" problem of large IOT devices and agents system. 
+  Considering large and longlived systems cannot rely only on some specific software, 
+  using raw system's processes permit to compose a system with several processes or devices, 
+  implemented with different langages and coming from multiple implementers or third party. 
+  This project is simple command line, as in *nix system, to monitor MQTT device or 
+  agents system. MQTT based communication devices (IOT) and agents are monitored, 
+  and alerts are emitted if devices or agents are not responding. 
+  Software agents are also restarted when crashed.  
+  IotMonitor records and restore MQTT states topics as they go and recover. 
+  It helps to maintain IOT things working, and avoid lots of administration tasks.
+
+grade: devel # must be 'stable' to release into candidate/stable channels
+confinement: devmode # use 'strict' once you have the right plugs and slots
+
+parts:
+  iotmonitor:
+    plugin: make
+    source-type: git
+    source: https://github.com/frett27/iotmonitor.git
+    build-snaps: [zig/latest/edge]
+    build-packages: [make, libleveldb-dev]
+    stage-packages: [libleveldbld]
+
+apps:
+  iotmonitor:
+    command: iotmonitor
+    deamon: simple
+

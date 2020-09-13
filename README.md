@@ -1,11 +1,9 @@
 
 ## IOTMonitor project
 
-IotMonitor aims to solve the "always up" problem of large IOT devices and agents system. Considering large and longlived systems cannot rely only on some specific software, using raw system's processes permit to compose a system with several processes or devices, implemented with different langages and coming from multiple implementers or third party.
+IotMonitor solve the "always up" problem of large IOT devices and agents system. Considering large and longlived systems cannot rely only on some specific software, using raw system's processes permit to compose a system with several processes or devices, implemented with different langages and coming from multiple implementers or third party.
 
-This project is simple command line, as in *nix system, to monitor MQTT device or agents system. MQTT based communication devices (IOT) and agents are monitored, and alerts are emitted if devices or agents are not responding. 
-
-Since version 0.2, software agents are also restarted when crashed. 
+This project is simple command line, as in *nix system, to monitor MQTT device or agents system. MQTT based communication devices (IOT) and agents are monitored, and alerts are emitted if devices or agents are not responding. Software agents are also restarted when crashed. 
 
 IotMonitor records and restore MQTT states topics as they go and recover. It helps to maintain IOT things working, and avoid lots of administration tasks.
 

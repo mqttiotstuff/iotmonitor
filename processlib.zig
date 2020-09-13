@@ -27,10 +27,12 @@ pub const ProcessInformation = struct {
                 return null;
             }
             const start = self.currentIndex;
+            // seek for next 0 ending or end of commandline buffer_size
             while (self.currentIndex < self.inner.commandlinebuffer_size and self.inner.commandlinebuffer[self.currentIndex] != '\x00') {
                 self.currentIndex = self.currentIndex + 1;
             }
-            self.currentIndex = self.currentIndex + 1;
+            // move to next after returning the element slice
+            defer self.currentIndex = self.currentIndex + 1;
             return self.inner.commandlinebuffer[start..self.currentIndex];
         }
     };
@@ -72,7 +74,6 @@ pub fn getProcessInformations(pid: i32, processInfo: *ProcessInformation) !bool 
 
 // test if buffer contains only digits
 fn isAllNumeric(buffer: []const u8) bool {
-    var isNumeric = true;
     for (buffer) |c| {
         if (c > '9' or c < '0') {
             return false;

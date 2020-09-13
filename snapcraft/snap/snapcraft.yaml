@@ -14,8 +14,8 @@ description: |
   IotMonitor records and restore MQTT states topics as they go and recover. 
   It helps to maintain IOT things working, and avoid lots of administration tasks.
 
-grade: devel # must be 'stable' to release into candidate/stable channels
-confinement: devmode # use 'strict' once you have the right plugs and slots
+grade: devel 
+confinement: devmode 
 
 parts:
   iotmonitor:

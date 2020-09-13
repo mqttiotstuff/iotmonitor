@@ -29,6 +29,6 @@ parts:
 
 apps:
   iotmonitor:
-    command: bin/iotmonitor
+    command: iotmonitor
 
 

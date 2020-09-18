@@ -85,7 +85,8 @@ pub const MqttCnx = struct {
         zclientid[clientid.len] = '\x00';
 
         // convert to C the input parameters (ensuring the sentinel)
-        const result = cmqtt.MQTTClient_create(&handle, zServerAddress.ptr, zclientid.ptr, 0, null);
+        const MQTTCLIENT_PERSISTENCE_NONE = 1;
+        const result = cmqtt.MQTTClient_create(&handle, zServerAddress.ptr, zclientid.ptr, MQTTCLIENT_PERSISTENCE_NONE, null);
 
         if (result > 0) return error.MQTTCreateError;
         const HEADER = [_]u8{ 'M', 'Q', 'T', 'C' };
@@ -162,6 +163,7 @@ pub const MqttCnx = struct {
             .retained = 0,
             .dup = 0,
             .msgid = 0,
+            // below, these are MQTTV5 specific properties
             .properties = cmqtt.MQTTProperties{
                 .count = 0,
                 .max_count = 0,

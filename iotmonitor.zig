@@ -70,10 +70,6 @@ test "no match 2" {
     assert(a == null);
 }
 
-const AdditionalProcessInformationsTag = enum {
-    True, False
-};
-
 const AdditionalProcessInformation = struct {
     // pid is to track the process while running
     pid: ?i32 = undefined,
@@ -128,6 +124,7 @@ fn stripLastWildCard(watchValue: []const u8) ![]const u8 {
     }
     return watchValue;
 }
+
 test "test update time" {
     var d = MonitoringInfo{
         .timeoutValue = 1,
@@ -376,7 +373,7 @@ const AllDevices = std.StringHashMap(*MonitoringInfo);
 const DiskHash = leveldb.LevelDBHashArray(u8, u8);
 
 // global variables
-var globalAllocator: *mem.Allocator = undefined;
+const globalAllocator = std.heap.c_allocator;
 var alldevices: AllDevices = undefined;
 var db: *DiskHash = undefined;
 
@@ -613,7 +610,6 @@ fn publishDeviceTimeOut(device: *MonitoringInfo) !void {
 
 // main procedure
 pub fn main() !void {
-    globalAllocator = std.heap.c_allocator;
     alldevices = AllDevices.init(globalAllocator);
     const configurationFile = "config.toml";
     try out.writeAll("Reading the config file\n");

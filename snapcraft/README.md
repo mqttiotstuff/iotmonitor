@@ -19,3 +19,6 @@ Install on dev stage
 Upload the edge :
 
   snapcraft upload --release=edge iotmonitor*.snap
+
+promote the snap to beta or candidate
+  snapcraft release iotmonitor 5 beta

@@ -108,7 +108,10 @@ pub fn listProcesses(callback: ProcessInformationCallback) !void {
 
         const pid = try fmt.parseInt(i32, f.name, 10);
         var pi = ProcessInformation{};
-        const successGetInformations = try getProcessInformations(pid, &pi);
+        const successGetInformations = getProcessInformations(pid, &pi) catch |e| {
+            // if file retrieve failed because of pid close, continue
+            continue;
+        };
         if (successGetInformations and pi.commandlinebuffer_size > 0) {
             callback(&pi);
             // debug.warn(" {}: {} \n", .{ pid, pi.commandlinebuffer[0..pi.commandlinebuffer_size] });

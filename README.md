@@ -23,13 +23,16 @@ This project is based on C Paho MQTT client library, use leveldb as state databa
 
 build the image :
 
-	cd docker
-	docker build -t iotmonitor .
+```bash
+cd docker
+docker build -t iotmonitor .
+```
 
 launch the container from image :
 
-        docker run --rm -d -u $(id --user) -v `pwd`:/config iotmonitor
-
+```bash
+docker run --rm -d -u $(id --user) -v `pwd`:/config iotmonitor
+```
 
 #### From scratch
 
@@ -42,15 +45,17 @@ for building the project, the following elements are needed :
 
 then launch the following commands :
 
-	git clone --recursive https://github.com/frett27/iotmonitor
-	cd iotmonitor
-	cd paho.mqtt.c
-	cmake -DPAHO_BUILD_STATIC=true .
-	make
-	cd ..
+```bash
+git clone --recursive https://github.com/frett27/iotmonitor
+cd iotmonitor
+cd paho.mqtt.c
+cmake -DPAHO_BUILD_STATIC=true .
+make
+cd ..
 
-	mkdir bin
-	zig build
+mkdir bin
+zig build
+```
 	
 
 
@@ -61,22 +66,26 @@ The configuration is defined in a TOML `config.toml` file, see an example in the
 A global Mqtt broker configuration section is defined using a heading `[mqtt]` 
 the following parameters are found :
 
-	[mqtt]
-	serverAddress="tcp://localhost:1883"
-	baseTopic="home/monitoring"
-	user=""
-	password=""
+```toml
+[mqtt]
+serverAddress="tcp://localhost:1883"
+baseTopic="home/monitoring"
+user=""
+password=""
+```
 
 
 
 In the configuration toml file, each device is declared in a section using a "device_" prefix
 in the section : the following elements can be found :
 
-	[device_esp04]
-	watchTimeOut=60
-	helloTopic="home/esp04"
-	watchTopics="home/esp04/sensors/#"
-	stateTopics="home/esp04/actuators/#"
+```toml
+[device_esp04]
+watchTimeOut=60
+helloTopic="home/esp04"
+watchTopics="home/esp04/sensors/#"
+stateTopics="home/esp04/actuators/#"
+```
 
 - `watchTimeOut` : watch dog for alive state, when the timeout is reached without and interactions on watchTopics, then iotmonitor trigger an expire message for the device
 - `helloTopic` : the topic to observe to welcome the device. This topic trigger the state recovering for the device and agents. IotMonitor, resend the previous stored `stateTopics`
@@ -85,9 +94,11 @@ in the section : the following elements can be found :
 
 Agents are declared using an "agent_" prefix in the section. Agents are devices with an associated command line (`exec` config key) that trigger the start of the software agent. IotMonitor checks periodically if the process is running, and relaunch it if needed.
 
-	[agent_ledboxdaemon]
-	exec="source ~/mqttagents/p3/bin/activate;cd ~/mqttagents/mqtt-agent-ledbox;python3 ledboxdaemon.py"
-	watchTopics="home/agents/ledbox/#"
+```toml
+[agent_ledboxdaemon]
+exec="source ~/mqttagents/p3/bin/activate;cd ~/mqttagents/mqtt-agent-ledbox;python3 ledboxdaemon.py"
+watchTopics="home/agents/ledbox/#"
+```
 
 IotMonitor running the processes identify the process using a specific bash command line containing an IOTMONITOR tag, which is recognized to detect if the process is running. Monitored processes are detached from the iotmonitor process, avoiding to relaunch the whole system in the case of restarting the `iotmonitor` process.
 
@@ -108,8 +119,10 @@ The counter is resetted at each startup.
 
 when-changed is a simple python command ligne that auto recompile the project, when files changes
 
-	when-changed *.zig zig build
-		 when-changed leveldb.zig ../zig/zig test leveldb.zig  -l leveldb -l c -l c++
+```bash
+when-changed *.zig zig build
+when-changed leveldb.zig ../zig/zig test leveldb.zig  -l leveldb -l c -l c++
+```
 
 ### Possible Improvments
 

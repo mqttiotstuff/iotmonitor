@@ -86,6 +86,7 @@ const MonitoringInfo = struct {
     timeoutValue: u32 = 30,
     stateTopics: ?[]const u8 = null,
     helloTopic: ?[]const u8 = null,
+    helloTopicCount: u64 = 0,
     allocator: *mem.Allocator,
     // in case of process informations,
     associatedProcessInformation: ?*AdditionalProcessInformation = null,
@@ -95,6 +96,8 @@ const MonitoringInfo = struct {
         device.allocator = allocator;
         device.stateTopics = null;
         device.helloTopic = null;
+        device.helloTopicCount = 0;
+        device.timeoutValue = 30;
         device.associatedProcessInformation = null;
 
         return device;
@@ -325,6 +328,11 @@ fn callback(topic: []u8, message: []u8) !void {
                 if (Verbose) {
                     try out.print("device started, put all state informations \n", .{});
                 }
+                // count the number of hello topic
+                //
+                //
+                deviceInfo.helloTopicCount += 1;
+
                 // iterate on db, on state topic
 
                 const itstorage = try db.iterator();
@@ -588,6 +596,24 @@ fn publishWatchDog() !void {
     };
 }
 
+fn publishDeviceMonitoringInfos(device: *MonitoringInfo) !void {
+    var topicBufferPayload = try globalAllocator.alloc(u8, 512);
+    defer globalAllocator.free(topicBufferPayload);
+    mem.secureZero(u8, topicBufferPayload);
+    _ = c.sprintf(topicBufferPayload.ptr, "%s/helloTopicCount/%s", MqttConfig.mqttIotmonitorBaseTopic.ptr, device.*.name.ptr);
+
+    var bufferPayload = try globalAllocator.alloc(u8, 512);
+    defer globalAllocator.free(bufferPayload);
+    mem.secureZero(u8, bufferPayload);
+
+    _ = c.sprintf(bufferPayload.ptr, "%u", device.helloTopicCount);
+    const payloadLen = c.strlen(bufferPayload.ptr);
+
+    cnx.publish(topicBufferPayload.ptr, bufferPayload[0..payloadLen]) catch {
+        std.debug.warn("cannot publish timeout message for device {} , will retry \n", .{device.name});
+    };
+}
+
 // this function pulish a mqtt message for a device that is not publishing
 // it mqtt messages
 fn publishDeviceTimeOut(device: *MonitoringInfo) !void {
@@ -687,6 +713,7 @@ pub fn main() !void {
             if (hasExpired) {
                 try publishDeviceTimeOut(deviceInfo);
             }
+            try publishDeviceMonitoringInfos(deviceInfo);
         }
     }
 

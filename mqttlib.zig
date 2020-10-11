@@ -187,7 +187,7 @@ pub const MqttCnx = struct {
             const waitResult = cmqtt.MQTTClient_waitForCompletion(self.handle, token.*, @intCast(c_ulong, 2000));
             if (waitResult != 0) return error.MQTTWaitTokenError;
             while (self.latestDeliveryToken.* != token.*) {
-                // CPU breath
+                // CPU breath, and yield
                 _ = c.usleep(1);
             }
         }

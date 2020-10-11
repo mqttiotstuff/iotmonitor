@@ -356,7 +356,10 @@ fn callback(topic: []u8, message: []u8) !void {
                                     mem.copy(u8, topicWithSentinel[0..], storedTopicValue.*);
 
                                     // resend state
-                                    try cnx.publish(topicWithSentinel, stateTopicValue.*);
+                                    cnx.publish(topicWithSentinel, stateTopicValue.*) catch |errorMqtt| {
+                                        std.debug.warn("ERROR {} fail to publish initial state on topic {}", .{ errorMqtt, topicWithSentinel });
+                                        try out.print(".. state restoring done, listening mqtt topics\n", .{});
+                                    };
                                 }
                             }
                         }
@@ -688,7 +691,10 @@ pub fn main() !void {
                 mem.copy(u8, topicWithSentinel[0..], subject.*);
 
                 // if failed, stop the process
-                try cnx.publish(topicWithSentinel, value.*);
+                cnx.publish(topicWithSentinel, value.*) catch |e| {
+                    std.debug.warn("ERROR {} fail to publish initial state on topic {}", .{ e, topicWithSentinel });
+                    try out.print(".. state restoring done, listening mqtt topics\n", .{});
+                };
             }
         }
         it.next();

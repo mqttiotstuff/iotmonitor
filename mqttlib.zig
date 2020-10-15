@@ -10,6 +10,9 @@ const c = @cImport({
 });
 
 const CallBack = fn (topic: []u8, message: []u8) void;
+
+const MAX_REGISTERED_TOPICS = 10;
+
 // Connexion to mqtt
 //
 pub const MqttCnx = struct {
@@ -19,6 +22,11 @@ pub const MqttCnx = struct {
     handle: cmqtt.MQTTClient = undefined,
     callBack: CallBack = undefined,
     latestDeliveryToken: *cmqtt.MQTTClient_deliveryToken = undefined,
+    connected: bool = undefined,
+    connect_option: *cmqtt.MQTTClient_connectOptions = undefined,
+
+    reconnect_registered_topics_length: u16 = 0,
+    reconnect_registered_topics: [10]?[]u8,
 
     // this message is received in an other thread
     fn _defaultCallback(topic: []u8, message: []u8) void {
@@ -26,7 +34,7 @@ pub const MqttCnx = struct {
     }
 
     fn _connLost(ctx: ?*c_void, m: [*c]u8) callconv(.C) void {
-        //        const self : *MqttCnx = @ptrCast(*MqttCnx,ctx);
+        const self_ctx = @intToPtr(*Self, @ptrToInt(ctx));
         _ = c.printf("connection lost");
     }
 
@@ -60,27 +68,29 @@ pub const MqttCnx = struct {
         self_ctx.*.latestDeliveryToken.* = token;
     }
 
+    pub fn deinit(self: *Self) !void {}
+
     pub fn init(allocator: *mem.Allocator, serverAddress: []const u8, clientid: []const u8, username: []const u8, password: []const u8) !*Self {
         var handle: cmqtt.MQTTClient = undefined;
 
         // we need to make a safe string with zero ending
         const zServerAddress = try allocator.alloc(u8, serverAddress.len + 1);
-        defer allocator.free(zServerAddress);
+        // defer allocator.free(zServerAddress);
         mem.copy(u8, zServerAddress, serverAddress[0..]);
         zServerAddress[serverAddress.len] = '\x00';
 
         const zusername = try allocator.alloc(u8, username.len + 1);
-        defer allocator.free(zusername);
+        // defer allocator.free(zusername);
         mem.copy(u8, zusername, username[0..]);
         zusername[username.len] = '\x00';
 
         const zpassword = try allocator.alloc(u8, password.len + 1);
-        defer allocator.free(zpassword);
+        // defer allocator.free(zpassword);
         mem.copy(u8, zpassword, password[0..]);
         zpassword[password.len] = '\x00';
 
         const zclientid = try allocator.alloc(u8, clientid.len + 1);
-        defer allocator.free(zclientid);
+        // defer allocator.free(zclientid);
         mem.copy(u8, zclientid, clientid[0..]);
         zclientid[clientid.len] = '\x00';
 
@@ -126,18 +136,51 @@ pub const MqttCnx = struct {
         }
 
         var self_ptr = try allocator.create(Self);
+        // init members
         self_ptr.handle = handle;
         self_ptr.allocator = allocator;
         self_ptr.callBack = _defaultCallback;
         self_ptr.latestDeliveryToken = try allocator.create(cmqtt.MQTTClient_deliveryToken);
+        self_ptr.connected = false;
+        // remember the connect options
+        self_ptr.connect_option = try allocator.create(cmqtt.MQTTClient_connectOptions);
+        self_ptr.connect_option.* = conn_options;
+        self_ptr.reconnect_registered_topics = mem.zeroes([10]?[]u8);
+        self_ptr.reconnect_registered_topics_length = 0;
 
         const retCallBacks = cmqtt.MQTTClient_setCallbacks(handle, self_ptr, _connLost, _msgArrived, _delivered);
+        try self_ptr.reconnect(true);
+        return self_ptr;
+    }
 
-        const r = cmqtt.MQTTClient_connect(handle, &conn_options);
+    fn reconnect(self: *Self, first: bool) !void {
+        if (self.*.connected) {
+            // nothing to do
+            return;
+        }
+
+        if (!first) {
+            const result = cmqtt.MQTTClient_disconnect(self.handle, 100);
+            if (result != 0) {
+                _ = c.printf("disconnection failed MQTTClient_disconnect returned %d, continue\n", result);
+            }
+        }
+
+        const r = cmqtt.MQTTClient_connect(self.handle, self.connect_option);
         _ = c.printf("connect to mqtt returned %d\n\x00", r);
         if (r != 0) return error.MQTTConnectError;
+        self.connected = true;
 
-        return self_ptr;
+        if (self.reconnect_registered_topics_length > 0) {
+            for (self.reconnect_registered_topics[0..self.reconnect_registered_topics_length]) |e| {
+                if (e) |nonNullPtr| {
+                    _ = c.printf("re-registering %s \n", nonNullPtr.ptr);
+                    self._register(nonNullPtr) catch |errregister| {
+                        _ = c.printf("cannot reregister \n");
+                    };
+                }
+            }
+        }
     }
 
     // publish a message with default QOS 0
@@ -146,6 +189,17 @@ pub const MqttCnx = struct {
     }
 
     pub fn publishWithQos(self: *Self, topic: [*c]const u8, msg: []const u8, qos: u8) !void {
+        self._publishWithQos(topic, msg, qos) catch |e| {
+            _ = c.printf("fail to publish, try to reconnect \n");
+            self.connected = false;
+            self.reconnect(false) catch {
+                _ = c.printf("failed to reconnect, will retry later \n");
+            };
+        };
+    }
+
+    // internal method, to permit to retry connect
+    fn _publishWithQos(self: *Self, topic: [*c]const u8, msg: []const u8, qos: u8) !void {
         const messageLength: c_int = @intCast(c_int, msg.len);
 
         // beacause c declared the message as mutable (not const),
@@ -194,7 +248,18 @@ pub const MqttCnx = struct {
     }
 
     pub fn register(self: *Self, topic: []const u8) !void {
-        const r = cmqtt.MQTTClient_subscribe(self.handle, topic.ptr, 0);
+        // remember the topic, to be able to re register at connection lost
+        const ptr = try self.allocator.alloc(u8, topic.len + 1);
+        mem.copy(u8, ptr, topic[0..]);
+        ptr[topic.len] = '\x00';
+        self.reconnect_registered_topics[self.*.reconnect_registered_topics_length] = ptr;
+        self.reconnect_registered_topics_length = self.*.reconnect_registered_topics_length + 1;
+        try self._register(ptr);
+    }
+
+    fn _register(self: *Self, topic: []const u8) !void {
+        _ = c.printf("register to %s \n", topic.ptr);
+        const r = cmqtt.MQTTClient_subscribe(self.*.handle, topic.ptr, 0);
         if (r != 0) return error.MQTTRegistrationError;
     }
 };

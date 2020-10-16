@@ -202,6 +202,9 @@ pub const MqttCnx = struct {
     fn _publishWithQos(self: *Self, topic: [*c]const u8, msg: []const u8, qos: u8) !void {
         const messageLength: c_int = @intCast(c_int, msg.len);
 
+        if (msg.len == 0) {
+            return;
+        }
         // beacause c declared the message as mutable (not const),
         // convert it to const type
         const constMessageContent: [*]u8 = @intToPtr([*]u8, @ptrToInt(msg.ptr));
@@ -249,6 +252,12 @@ pub const MqttCnx = struct {
 
     pub fn register(self: *Self, topic: []const u8) !void {
         // remember the topic, to be able to re register at connection lost
+        //
+        if (self.*.reconnect_registered_topics_length >= self.reconnect_registered_topics.len) {
+            // not enought room remember registered topics
+            return error.TooMuchRegisteredTopics;
+        }
+
         const ptr = try self.allocator.alloc(u8, topic.len + 1);
         mem.copy(u8, ptr, topic[0..]);
         ptr[topic.len] = '\x00';

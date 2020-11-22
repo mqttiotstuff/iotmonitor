@@ -85,11 +85,11 @@ The counter is resetted at each startup.
 
 ### Using docker, 
 
-build the image :
+build the image using 0.7 master, with a specific commit:
 
 ```bash
 cd docker
-docker build -t iotmonitor .
+docker build --build-arg COMMIT=39336fd2e  -t iotmonitor .
 ```
 
 launch the container from image :

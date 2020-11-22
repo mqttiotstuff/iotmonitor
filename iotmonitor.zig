@@ -112,13 +112,23 @@ test "test update time" {
     debug.assert(!try d.hasExpired());
 }
 
+pub fn secureZero(comptime T: type, s: []T) void {
+    // NOTE: We do not use a volatile slice cast here since LLVM cannot	
+    // see that it can be replaced by a memset.	
+    const ptr = @ptrCast([*]volatile u8, s.ptr);
+    const length = s.len * @sizeOf(T);
+    @memset(ptr, 0, length);
+}
+
 // parse the device info,
 // device must have a watch topics
 fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table) !*MonitoringInfo {
     const device = try MonitoringInfo.init(allocator);
     errdefer device.deinit();
     const allocName = try allocator.alloc(u8, name.*.len + 1);
-    mem.secureZero(u8, allocName);
+
+    secureZero(u8, allocName);
+
     std.mem.copy(u8, allocName, name.*);
     device.name = allocName;
 
@@ -545,12 +555,12 @@ fn checkProcessesAndRunMissing() !void {
 fn publishWatchDog() !void {
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(topicBufferPayload);
-    mem.secureZero(u8, topicBufferPayload);
+    secureZero(u8, topicBufferPayload);
     _ = c.sprintf(topicBufferPayload.ptr, "%s/up", MqttConfig.mqttIotmonitorBaseTopic.ptr);
 
     var bufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(bufferPayload);
-    mem.secureZero(u8, bufferPayload);
+    secureZero(u8, bufferPayload);
     cpt = (cpt + 1) % 1_000_000;
     _ = c.sprintf(bufferPayload.ptr, "%d", cpt);
     cpt = (cpt + 1) % 1_000_000;
@@ -565,12 +575,12 @@ fn publishWatchDog() !void {
 fn publishDeviceMonitoringInfos(device: *MonitoringInfo) !void {
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(topicBufferPayload);
-    mem.secureZero(u8, topicBufferPayload);
+    secureZero(u8, topicBufferPayload);
     _ = c.sprintf(topicBufferPayload.ptr, "%s/helloTopicCount/%s", MqttConfig.mqttIotmonitorBaseTopic.ptr, device.*.name.ptr);
 
     var bufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(bufferPayload);
-    mem.secureZero(u8, bufferPayload);
+    secureZero(u8, bufferPayload);
 
     _ = c.sprintf(bufferPayload.ptr, "%u", device.helloTopicCount);
     const payloadLen = c.strlen(bufferPayload.ptr);
@@ -585,13 +595,13 @@ fn publishDeviceMonitoringInfos(device: *MonitoringInfo) !void {
 fn publishDeviceTimeOut(device: *MonitoringInfo) !void {
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(topicBufferPayload);
-    mem.secureZero(u8, topicBufferPayload);
+    secureZero(u8, topicBufferPayload);
     _ = c.sprintf(topicBufferPayload.ptr, "%s/expired/%s", MqttConfig.mqttIotmonitorBaseTopic.ptr, device.*.name.ptr);
 
     var bufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(bufferPayload);
 
-    mem.secureZero(u8, bufferPayload);
+    secureZero(u8, bufferPayload);
     _ = c.sprintf(bufferPayload.ptr, "%d", device.nextContact);
     const payloadLen = c.strlen(bufferPayload.ptr);
 

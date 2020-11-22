@@ -38,7 +38,7 @@ for building the project, the following elements are needed :
 - leveldb library (used for storing stated)
 - C compiler (builds essentials)
 - cmake
-- zig : 0.6
+- zig : 0.7
 
 then launch the following commands :
 

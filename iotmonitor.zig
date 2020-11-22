@@ -23,53 +23,16 @@ const c = @cImport({
 const leveldb = @import("leveldb.zig");
 const mqtt = @import("mqttlib.zig");
 const processlib = @import("processlib.zig");
-
+const topics = @import("topics.zig");
 const toml = @import("toml");
 
 const out = std.io.getStdOut().outStream();
 
 const Verbose = false;
-
-// test if the evaluted topic belong to the reference Topic,
-// return the sub path if it is
-fn doesTopicBelongTo(evaluatedTopic: []const u8, referenceTopic: []const u8) !?[]const u8 {
-    if (evaluatedTopic.len < referenceTopic.len) return null;
-    const isWatched = mem.eql(u8, evaluatedTopic[0..referenceTopic.len], referenceTopic);
-    if (isWatched) {
-        const subTopic = evaluatedTopic[referenceTopic.len..];
-        return subTopic;
-    }
-    return null;
-}
-
-test "Test belong to" {
-    const topic1: []const u8 = "/home";
-    const topic2: []const u8 = "/home";
-    const a = try doesTopicBelongTo(topic1, topic2);
-    assert(a != null);
-    assert(a.?.len == 0);
-}
-test "sub path" {
-    const topic1: []const u8 = "/home";
-    const topic2: []const u8 = "/ho";
-    const a = try doesTopicBelongTo(topic1, topic2);
-    assert(a != null);
-    assert(a.?.len == 2);
-    assert(mem.eql(u8, a.?, "me"));
-}
-test "no match 1" {
-    const topic1: []const u8 = "/home";
-    const topic2: []const u8 = "/ho2";
-    const a = try doesTopicBelongTo(topic1, topic2);
-    assert(a == null);
-}
-test "no match 2" {
-    const topic1: []const u8 = "/home";
-    const topic2: []const u8 = "/home2";
-    const a = try doesTopicBelongTo(topic1, topic2);
-    assert(a == null);
-}
-
+// This structure defines the process informations
+// with live agent running, this permit to track the process and
+// relaunch it if needed
+//
 const AdditionalProcessInformation = struct {
     // pid is to track the process while running
     pid: ?i32 = undefined,
@@ -149,13 +112,23 @@ test "test update time" {
     debug.assert(!try d.hasExpired());
 }
 
+pub fn secureZero(comptime T: type, s: []T) void {
+    // NOTE: We do not use a volatile slice cast here since LLVM cannot	
+    // see that it can be replaced by a memset.	
+    const ptr = @ptrCast([*]volatile u8, s.ptr);
+    const length = s.len * @sizeOf(T);
+    @memset(ptr, 0, length);
+}
+
 // parse the device info,
 // device must have a watch topics
 fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table) !*MonitoringInfo {
     const device = try MonitoringInfo.init(allocator);
     errdefer device.deinit();
     const allocName = try allocator.alloc(u8, name.*.len + 1);
-    mem.secureZero(u8, allocName);
+
+    secureZero(u8, allocName);
+
     std.mem.copy(u8, allocName, name.*);
     device.name = allocName;
 
@@ -311,7 +284,7 @@ fn callback(topic: []u8, message: []u8) !void {
         const storeTopic = deviceInfo.stateTopics;
         const helloTopic = deviceInfo.helloTopic;
         if (storeTopic) |store| {
-            if (try doesTopicBelongTo(topic, store)) |sub| {
+            if (try topics.doesTopicBelongTo(topic, store)) |sub| {
                 // store sub topic in leveldb
                 // trigger the refresh for timeout
                 if (Verbose) {
@@ -368,7 +341,7 @@ fn callback(topic: []u8, message: []u8) !void {
                 }
             }
         } // hello
-        if (try doesTopicBelongTo(topic, watchTopic)) |sub| {
+        if (try topics.doesTopicBelongTo(topic, watchTopic)) |sub| {
             // trigger the timeout for the iot element
             try deviceInfo.updateNextContact();
         }
@@ -582,12 +555,12 @@ fn checkProcessesAndRunMissing() !void {
 fn publishWatchDog() !void {
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(topicBufferPayload);
-    mem.secureZero(u8, topicBufferPayload);
+    secureZero(u8, topicBufferPayload);
     _ = c.sprintf(topicBufferPayload.ptr, "%s/up", MqttConfig.mqttIotmonitorBaseTopic.ptr);
 
     var bufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(bufferPayload);
-    mem.secureZero(u8, bufferPayload);
+    secureZero(u8, bufferPayload);
     cpt = (cpt + 1) % 1_000_000;
     _ = c.sprintf(bufferPayload.ptr, "%d", cpt);
     cpt = (cpt + 1) % 1_000_000;
@@ -602,12 +575,12 @@ fn publishWatchDog() !void {
 fn publishDeviceMonitoringInfos(device: *MonitoringInfo) !void {
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(topicBufferPayload);
-    mem.secureZero(u8, topicBufferPayload);
+    secureZero(u8, topicBufferPayload);
     _ = c.sprintf(topicBufferPayload.ptr, "%s/helloTopicCount/%s", MqttConfig.mqttIotmonitorBaseTopic.ptr, device.*.name.ptr);
 
     var bufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(bufferPayload);
-    mem.secureZero(u8, bufferPayload);
+    secureZero(u8, bufferPayload);
 
     _ = c.sprintf(bufferPayload.ptr, "%u", device.helloTopicCount);
     const payloadLen = c.strlen(bufferPayload.ptr);
@@ -622,13 +595,13 @@ fn publishDeviceMonitoringInfos(device: *MonitoringInfo) !void {
 fn publishDeviceTimeOut(device: *MonitoringInfo) !void {
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(topicBufferPayload);
-    mem.secureZero(u8, topicBufferPayload);
+    secureZero(u8, topicBufferPayload);
     _ = c.sprintf(topicBufferPayload.ptr, "%s/expired/%s", MqttConfig.mqttIotmonitorBaseTopic.ptr, device.*.name.ptr);
 
     var bufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(bufferPayload);
 
-    mem.secureZero(u8, bufferPayload);
+    secureZero(u8, bufferPayload);
     _ = c.sprintf(bufferPayload.ptr, "%d", device.nextContact);
     const payloadLen = c.strlen(bufferPayload.ptr);
 

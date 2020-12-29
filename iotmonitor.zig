@@ -428,7 +428,7 @@ fn launchProcess(monitoringInfo: *MonitoringInfo) !void {
         try m.set("IOTMONITORMAGIC", bufferMagic[0..c.strlen(bufferMagic)]);
 
         // execute the process
-        const err = os.execvpe(globalAllocator, &argv, &m);
+        const err = std.process.execve(globalAllocator, &argv, &m);
         // if  succeeded the process is replaced
         // otherwise this is an error
         unreachable;

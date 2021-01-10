@@ -26,7 +26,8 @@ const processlib = @import("processlib.zig");
 const topics = @import("topics.zig");
 const toml = @import("toml");
 
-const out = std.io.getStdOut().outStream();
+const stdoutFile = std.io.getStdOut();
+const out = std.fs.File.writer(stdoutFile);
 
 const Verbose = false;
 // This structure defines the process informations

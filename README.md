@@ -85,12 +85,8 @@ The counter is resetted at each startup.
 
 ### Using docker, 
 
-build the image using 0.7 master, with a specific commit:
+[see README in docker subfolder, for details and construct the image](docker/README.md)
 
-```bash
-cd docker
-docker build --build-arg COMMIT=39336fd2e  -t iotmonitor .
-```
 
 launch the container from image :
 
@@ -105,7 +101,7 @@ for building the project, the following elements are needed :
 - leveldb library (used for storing stated)
 - C compiler (builds essentials)
 - cmake
-- zig : 0.7
+- zig : 0.8
 
 then launch the following commands :
 

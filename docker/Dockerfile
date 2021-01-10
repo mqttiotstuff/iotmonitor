@@ -1,5 +1,6 @@
 FROM ubuntu:20.04 AS builder
 ARG COMMIT
+ARG VERSION
 
 RUN apt-get update
 RUN apt-get install -y build-essential git  libleveldb-dev 
@@ -7,10 +8,10 @@ RUN apt-get install -y wget xz-utils
 RUN DEBIAN_FRONTEND="noninteractive" apt-get install -y cmake
 
 WORKDIR /build
-RUN wget https://ziglang.org/builds/zig-linux-x86_64-0.7.0+$COMMIT.tar.xz 
+RUN wget https://ziglang.org/builds/zig-linux-x86_64-$VERSION+$COMMIT.tar.xz 
 
-RUN xz -d zig-linux-x86_64-0.7.0+$COMMIT.tar.xz
-RUN tar xvf zig-linux-x86_64-0.7.0+$COMMIT.tar
+RUN xz -d zig-linux-x86_64-$VERSION+$COMMIT.tar.xz
+RUN tar xvf zig-linux-x86_64-$VERSION+$COMMIT.tar
 
 
 RUN git clone --recursive https://github.com/mqttiotstuff/iotmonitor
@@ -22,7 +23,7 @@ RUN make
 WORKDIR /build/iotmonitor
 RUN mkdir bin
 
-RUN ../zig-linux-x86_64-0.7.0+$COMMIT/zig build
+RUN ../zig-linux-x86_64-$VERSION+$COMMIT/zig build
 
 FROM ubuntu:20.04
 

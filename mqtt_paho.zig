@@ -84,9 +84,9 @@ pub const struct__G_fpos64_t = extern struct {
     __state: __mbstate_t,
 };
 pub const __fpos64_t = struct__G_fpos64_t;
-pub const struct__IO_marker = @OpaqueType();
-pub const struct__IO_codecvt = @OpaqueType();
-pub const struct__IO_wide_data = @OpaqueType();
+pub const struct__IO_marker = opaque {};
+pub const struct__IO_codecvt = opaque {};
+pub const struct__IO_wide_data = opaque {};
 pub const struct__IO_FILE = extern struct {
     _flags: c_int,
     _IO_read_ptr: [*c]u8,
@@ -717,7 +717,7 @@ pub const __CLOCKID_T_TYPE = __S32_TYPE;
 pub const __INT_LEAST8_FMTi__ = "hhi";
 pub const __USE_POSIX2 = 1;
 pub const __UINT64_FMTX__ = "lX";
-pub inline fn va_start(ap: anytype, param: anytype) @TypeOf(__builtin_va_start(ap, param)) {
+pub fn va_start(ap: anytype, param: anytype) @TypeOf(__builtin_va_start(ap, param)) {
     return __builtin_va_start(ap, param);
 }
 pub const __SIG_ATOMIC_MAX__ = 2147483647;
@@ -725,7 +725,7 @@ pub const __SSE__ = 1;
 pub const __BYTE_ORDER__ = __ORDER_LITTLE_ENDIAN__;
 pub const __NO_MATH_INLINES = 1;
 pub const __SIZEOF_FLOAT128__ = 16;
-pub inline fn __GNUC_PREREQ(maj: anytype, min: anytype) @TypeOf(__GNUC__ << 16 + __GNUC_MINOR__ >= maj << 16 + min) {
+pub fn __GNUC_PREREQ(maj: anytype, min: anytype) @TypeOf(__GNUC__ << 16 + __GNUC_MINOR__ >= maj << 16 + min) {
     return __GNUC__ << 16 + __GNUC_MINOR__ >= maj << 16 + min;
 }
 pub const __INT_FAST32_FMTd__ = "d";
@@ -757,7 +757,7 @@ pub const __UINT_LEAST64_FMTu__ = "lu";
 pub const __DBL_DENORM_MIN__ = 4.9406564584124654e-324;
 pub const __UINT8_FMTu__ = "hhu";
 pub const __INT_FAST16_MAX__ = 32767;
-pub inline fn __bos0(ptr: anytype) @TypeOf(__builtin_object_size(ptr, 0)) {
+pub fn __bos0(ptr: anytype) @TypeOf(__builtin_object_size(ptr, 0)) {
     return __builtin_object_size(ptr, 0);
 }
 pub const __LP64__ = 1;
@@ -770,7 +770,7 @@ pub const __DBL_MAX_10_EXP__ = 308;
 pub const __PTRDIFF_FMTi__ = "li";
 pub const __STDC_IEC_559__ = 1;
 pub const MQTT_BAD_SUBSCRIBE = 0x80;
-pub inline fn __REDIRECT_NTH_LDBL(name: anytype, proto: anytype, alias: anytype) @TypeOf(__REDIRECT_NTH(name, proto, alias)) {
+pub fn __REDIRECT_NTH_LDBL(name: anytype, proto: anytype, alias: anytype) @TypeOf(__REDIRECT_NTH(name, proto, alias)) {
     return __REDIRECT_NTH(name, proto, alias);
 }
 pub const __FLT_MIN_EXP__ = -125;
@@ -793,7 +793,7 @@ pub const __INT_LEAST64_FMTd__ = "ld";
 pub const __GNU_LIBRARY__ = 6;
 pub const __UINT_LEAST8_FMTu__ = "hhu";
 pub const __FLT_MAX__ = @as(f32, 3.40282347e+38);
-pub inline fn __glibc_likely(cond: anytype) @TypeOf(__builtin_expect(cond, 1)) {
+pub fn __glibc_likely(cond: anytype) @TypeOf(__builtin_expect(cond, 1)) {
     return __builtin_expect(cond, 1);
 }
 pub const __CPU_MASK_TYPE = __SYSCALL_ULONG_TYPE;
@@ -805,7 +805,7 @@ pub const MQTTVERSION_5 = 5;
 pub const __UINT_FAST32_FMTX__ = "X";
 pub const __DECIMAL_DIG__ = __LDBL_DECIMAL_DIG__;
 pub const __LZCNT__ = 1;
-pub inline fn __glibc_clang_has_extension(ext: anytype) @TypeOf(__has_extension(ext)) {
+pub fn __glibc_clang_has_extension(ext: anytype) @TypeOf(__has_extension(ext)) {
     return __has_extension(ext);
 }
 pub const __BLKCNT_T_TYPE = __SYSCALL_SLONG_TYPE;
@@ -823,7 +823,7 @@ pub const __FLT_DENORM_MIN__ = @as(f32, 1.40129846e-45);
 pub const __MMX__ = 1;
 pub const __NO_INLINE__ = 1;
 pub const __SIZEOF_WINT_T__ = 4;
-pub inline fn __GLIBC_PREREQ(maj: anytype, min: anytype) @TypeOf(__GLIBC__ << 16 + __GLIBC_MINOR__ >= maj << 16 + min) {
+pub fn __GLIBC_PREREQ(maj: anytype, min: anytype) @TypeOf(__GLIBC__ << 16 + __GLIBC_MINOR__ >= maj << 16 + min) {
     return __GLIBC__ << 16 + __GLIBC_MINOR__ >= maj << 16 + min;
 }
 pub const __STDC_IEC_559_COMPLEX__ = 1;
@@ -836,7 +836,7 @@ pub const __LITTLE_ENDIAN__ = 1;
 pub const MQTTCLIENT_DISCONNECTED = -3;
 pub const __UINTMAX_C_SUFFIX__ = UL;
 pub const __INO_T_MATCHES_INO64_T = 1;
-pub inline fn __attribute_deprecated_msg__(msg: anytype) @TypeOf(__attribute__(__deprecated__(msg))) {
+pub fn __attribute_deprecated_msg__(msg: anytype) @TypeOf(__attribute__(__deprecated__(msg))) {
     return __attribute__(__deprecated__(msg));
 }
 pub const _IO_USER_LOCK = 0x8000;
@@ -868,7 +868,7 @@ pub const EOF = -1;
 pub const __UID_T_TYPE = __U32_TYPE;
 pub const __INT_FAST32_TYPE__ = c_int;
 pub const __GCC_HAVE_SYNC_COMPARE_AND_SWAP_1 = 1;
-pub inline fn __va_copy(d: anytype, s: anytype) @TypeOf(__builtin_va_copy(d, s)) {
+pub fn __va_copy(d: anytype, s: anytype) @TypeOf(__builtin_va_copy(d, s)) {
     return __builtin_va_copy(d, s);
 }
 pub const __restrict_arr = __restrict;
@@ -905,7 +905,7 @@ pub const __gnu_linux__ = 1;
 pub const _DEBUG = 1;
 pub const _____fpos64_t_defined = 1;
 pub const _IO_EOF_SEEN = 0x0010;
-pub inline fn __PMT(args: anytype) @TypeOf(args) {
+pub fn __PMT(args: anytype) @TypeOf(args) {
     return args;
 }
 pub const __UINTPTR_WIDTH__ = 64;
@@ -1009,7 +1009,7 @@ pub const _BITS_TYPESIZES_H = 1;
 pub const _IOLBF = 1;
 pub const __SSE2_MATH__ = 1;
 pub const __GCC_ATOMIC_SHORT_LOCK_FREE = 2;
-pub inline fn __P(args: anytype) @TypeOf(args) {
+pub fn __P(args: anytype) @TypeOf(args) {
     return args;
 }
 pub const __TIME_T_TYPE = __SYSCALL_SLONG_TYPE;
@@ -1046,7 +1046,7 @@ pub const __UINTMAX_MAX__ = @as(c_ulong, 18446744073709551615);
 pub const _SYS_CDEFS_H = 1;
 pub const __INT_LEAST16_FMTd__ = "hd";
 pub const __SIZEOF_PTRDIFF_T__ = 8;
-pub inline fn __glibc_clang_prereq(maj: anytype, min: anytype) @TypeOf(__clang_major__ << 16 + __clang_minor__ >= maj << 16 + min) {
+pub fn __glibc_clang_prereq(maj: anytype, min: anytype) @TypeOf(__clang_major__ << 16 + __clang_minor__ >= maj << 16 + min) {
     return __clang_major__ << 16 + __clang_minor__ >= maj << 16 + min;
 }
 pub const __UINT_LEAST16_FMTu__ = "hu";
@@ -1059,7 +1059,7 @@ pub const __GNUC_STDC_INLINE__ = 1;
 pub const __UINT32_FMTX__ = "X";
 pub const __DBL_DIG__ = 15;
 pub const __SHRT_MAX__ = 32767;
-pub inline fn va_copy(dest: anytype, src: anytype) @TypeOf(__builtin_va_copy(dest, src)) {
+pub fn va_copy(dest: anytype, src: anytype) @TypeOf(__builtin_va_copy(dest, src)) {
     return __builtin_va_copy(dest, src);
 }
 pub const __ATOMIC_CONSUME = 1;
@@ -1077,7 +1077,7 @@ pub const __UINT8_FMTo__ = "hho";
 pub const __USE_POSIX199506 = 1;
 pub const __struct_FILE_defined = 1;
 pub const __amdfam10__ = 1;
-pub inline fn __bos(ptr: anytype) @TypeOf(__builtin_object_size(ptr, __USE_FORTIFY_LEVEL > 1)) {
+pub fn __bos(ptr: anytype) @TypeOf(__builtin_object_size(ptr, __USE_FORTIFY_LEVEL > 1)) {
     return __builtin_object_size(ptr, __USE_FORTIFY_LEVEL > 1);
 }
 pub const __FLT_HAS_DENORM__ = 1;
@@ -1094,7 +1094,7 @@ pub const __GXX_ABI_VERSION = 1002;
 pub const __tune_amdfam10__ = 1;
 pub const __SIZEOF_LONG_LONG__ = 8;
 pub const __INT32_TYPE__ = c_int;
-pub inline fn __ASMNAME(cname: anytype) @TypeOf(__ASMNAME2(__USER_LABEL_PREFIX__, cname)) {
+pub fn __ASMNAME(cname: anytype) @TypeOf(__ASMNAME2(__USER_LABEL_PREFIX__, cname)) {
     return __ASMNAME2(__USER_LABEL_PREFIX__, cname);
 }
 pub const __OPENCL_MEMORY_SCOPE_ALL_SVM_DEVICES = 3;
@@ -1106,7 +1106,7 @@ pub const __INT64_FMTi__ = "li";
 pub const __INT_FAST64_FMTi__ = "li";
 pub const __RLIM_T_TYPE = __SYSCALL_ULONG_TYPE;
 pub const __attribute_const__ = __attribute__(__const__);
-pub inline fn __attribute_format_arg__(x: anytype) @TypeOf(__attribute__(__format_arg__(x))) {
+pub fn __attribute_format_arg__(x: anytype) @TypeOf(__attribute__(__format_arg__(x))) {
     return __attribute__(__format_arg__(x));
 }
 pub const __GCC_ATOMIC_TEST_AND_SET_TRUEVAL = 1;
@@ -1142,11 +1142,11 @@ pub const __DBL_MAX_EXP__ = 1024;
 pub const __CLANG_ATOMIC_CHAR_LOCK_FREE = 2;
 pub const MQTTCLIENT_BAD_MQTT_OPTION = -15;
 pub const __CLANG_ATOMIC_CHAR32_T_LOCK_FREE = 2;
-pub inline fn __glibc_unlikely(cond: anytype) @TypeOf(__builtin_expect(cond, 0)) {
+pub fn __glibc_unlikely(cond: anytype) @TypeOf(__builtin_expect(cond, 0)) {
     return __builtin_expect(cond, 0);
 }
 pub const __GCC_ASM_FLAG_OUTPUTS__ = 1;
-pub inline fn __glibc_has_attribute(attr: anytype) @TypeOf(__has_attribute(attr)) {
+pub fn __glibc_has_attribute(attr: anytype) @TypeOf(__has_attribute(attr)) {
     return __has_attribute(attr);
 }
 pub const __PTRDIFF_MAX__ = @as(c_long, 9223372036854775807);
@@ -1166,13 +1166,13 @@ pub const __FD_SETSIZE = 1024;
 pub const __amd64 = 1;
 pub const __WINT_MAX__ = @as(c_uint, 4294967295);
 pub const _IOFBF = 0;
-pub inline fn __attribute_format_strfmon__(a: anytype, b: anytype) @TypeOf(__attribute__(__format__(__strfmon__, a, b))) {
+pub fn __attribute_format_strfmon__(a: anytype, b: anytype) @TypeOf(__attribute__(__format__(__strfmon__, a, b))) {
     return __attribute__(__format__(__strfmon__, a, b));
 }
 pub const __UINTPTR_FMTo__ = "lo";
 pub const __INT32_MAX__ = 2147483647;
 pub const __INTPTR_FMTd__ = "ld";
-pub inline fn va_arg(ap: anytype, type_1: anytype) @TypeOf(__builtin_va_arg(ap, type_1)) {
+pub fn va_arg(ap: anytype, type_1: anytype) @TypeOf(__builtin_va_arg(ap, type_1)) {
     return __builtin_va_arg(ap, type_1);
 }
 pub const __USECONDS_T_TYPE = __U32_TYPE;
@@ -1189,7 +1189,7 @@ pub const __FILE_defined = 1;
 pub const __FLT_HAS_QUIET_NAN__ = 1;
 pub const __INT_LEAST32_TYPE__ = c_int;
 pub const __BIGGEST_ALIGNMENT__ = 16;
-pub inline fn __REDIRECT_LDBL(name: anytype, proto: anytype, alias: anytype) @TypeOf(__REDIRECT(name, proto, alias)) {
+pub fn __REDIRECT_LDBL(name: anytype, proto: anytype, alias: anytype) @TypeOf(__REDIRECT(name, proto, alias)) {
     return __REDIRECT(name, proto, alias);
 }
 pub const __GCC_ATOMIC_POINTER_LOCK_FREE = 2;
@@ -1218,7 +1218,7 @@ pub const __SIZEOF_INT__ = 4;
 pub const __TIMESIZE = __WORDSIZE;
 pub const __UINT32_C_SUFFIX__ = U;
 pub const __x86_64__ = 1;
-pub inline fn va_end(ap: anytype) @TypeOf(__builtin_va_end(ap)) {
+pub fn va_end(ap: anytype) @TypeOf(__builtin_va_end(ap)) {
     return __builtin_va_end(ap);
 }
 pub const __SUSECONDS_T_TYPE = __SYSCALL_SLONG_TYPE;

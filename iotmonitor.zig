@@ -114,8 +114,8 @@ test "test update time" {
 }
 
 pub fn secureZero(comptime T: type, s: []T) void {
-    // NOTE: We do not use a volatile slice cast here since LLVM cannot	
-    // see that it can be replaced by a memset.	
+    // NOTE: We do not use a volatile slice cast here since LLVM cannot
+    // see that it can be replaced by a memset.
     const ptr = @ptrCast([*]volatile u8, s.ptr);
     const length = s.len * @sizeOf(T);
     @memset(ptr, 0, length);
@@ -189,9 +189,7 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
     return device;
 }
 
-const Config = struct {
-    clientId: []const u8, mqttBroker: []const u8, user: []const u8, password: []const u8, mqttIotmonitorBaseTopic: []u8
-};
+const Config = struct { clientId: []const u8, mqttBroker: []const u8, user: []const u8, password: []const u8, mqttIotmonitorBaseTopic: []u8 };
 
 var MqttConfig: *Config = undefined;
 
@@ -293,7 +291,7 @@ fn callback(topic: []u8, message: []u8) !void {
                     try out.print("length {}\n", .{topic.len});
                 }
                 db.put(topic, message) catch |errStorage| {
-                    debug.warn("fail to store message {} for topic {}, on databasei with error {} \n", .{ message, topic, errStorage });
+                    debug.warn("fail to store message {s} for topic {s}, on database with error {} \n", .{ message, topic, errStorage });
                 };
             }
         }
@@ -524,7 +522,7 @@ fn runAllMissings() !void {
         if (device.associatedProcessInformation) |processinfo| {
             // this is a process monitored
             if (processinfo.*.pid == null) {
-                out.print("running ...{} \n", .{device.name}) catch unreachable;
+                out.print("running ...{s} \n", .{device.name}) catch unreachable;
                 // no pid associated to the info
                 //
                 launchProcess(device) catch {
@@ -636,7 +634,7 @@ pub fn main() !void {
 
     try out.writeAll("Connecting to mqtt ..\n");
 
-    try out.print("connecting to {} with user {}\n", .{ serverAddress, userName });
+    try out.print("connecting to {s} with user {s}\n", .{ serverAddress, userName });
 
     cnx = try mqtt.MqttCnx.init(globalAllocator, serverAddress, clientid, userName, password);
 
@@ -658,7 +656,7 @@ pub fn main() !void {
             const v = it.iterValue();
             if (v) |value| {
                 defer globalAllocator.destroy(value);
-                try out.print("sending initial stored state {} to {}\n", .{ value.*, subject.* });
+                try out.print("sending initial stored state to {s}\n", .{subject.*});
 
                 const topicWithSentinel = try globalAllocator.allocSentinel(u8, subject.*.len, 0);
                 defer globalAllocator.free(topicWithSentinel);

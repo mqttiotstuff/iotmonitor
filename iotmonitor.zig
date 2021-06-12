@@ -626,6 +626,9 @@ fn publishDeviceTimeOut(device: *MonitoringInfo) !void {
 
 // main procedure
 pub fn main() !void {
+    try out.writeAll("IotMonitor start, version 0.2.2\n");
+    try out.writeAll("-------------------------------\n");
+
     alldevices = AllDevices.init(globalAllocator);
     const configurationFile = "config.toml";
     try out.writeAll("Reading the config file\n");

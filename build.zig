@@ -8,7 +8,7 @@ const Target = std.Target;
 
 pub fn build(b: *Builder) void {
     const exe = b.addExecutable("iotmonitor", "iotmonitor.zig");
-    exe.setBuildMode(builtin.Mode.Debug);
+    // exe.setBuildMode(builtin.Mode.Debug);
     // exe.setBuildMode(builtin.Mode.ReleaseSafe);
 
     exe.addPackagePath("toml", "zig-toml/src/toml.zig");

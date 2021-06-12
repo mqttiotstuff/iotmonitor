@@ -173,7 +173,7 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
         assert(helloValue.len > 0);
         device.helloTopic = helloValue;
         if (Verbose) {
-            _ = try out.print("hello topic for device {}\n", .{device.helloTopic});
+            _ = try out.print("hello topic for device {s}\n", .{device.helloTopic});
         }
     }
 
@@ -202,18 +202,18 @@ fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename
 
     var it = config.children.iterator();
     while (it.next()) |e| {
-        if (e.key.len >= 7) {
+        if (e.key_ptr.*.len >= 7) {
             const DEVICEPREFIX = "device_";
             const AGENTPREFIX = "agent_";
-            const isDevice = mem.eql(u8, e.key[0..DEVICEPREFIX.len], DEVICEPREFIX);
-            const isAgent = mem.eql(u8, e.key[0..AGENTPREFIX.len], AGENTPREFIX);
+            const isDevice = mem.eql(u8, e.key_ptr.*[0..DEVICEPREFIX.len], DEVICEPREFIX);
+            const isAgent = mem.eql(u8, e.key_ptr.*[0..AGENTPREFIX.len], AGENTPREFIX);
             if (isDevice or isAgent) {
                 if (Verbose) {
-                    try out.print("device found :{}\n", .{e.key});
+                    try out.print("device found :{}\n", .{e.key_ptr.*});
                 }
                 var prefixlen = AGENTPREFIX.len;
                 if (isDevice) prefixlen = DEVICEPREFIX.len;
-                const dev = try parseDevice(allocator, &e.key[prefixlen..], e.value);
+                const dev = try parseDevice(allocator, &e.key_ptr.*[prefixlen..], e.value_ptr.*);
                 if (Verbose) {
                     try out.print("add {} to device list, with watch {} and state {} \n", .{ dev.name, dev.watchTopics, dev.stateTopics });
                 }
@@ -277,7 +277,7 @@ fn callback(topic: []u8, message: []u8) !void {
 
     // device loop
     while (iterator.next()) |e| {
-        const deviceInfo = e.value;
+        const deviceInfo = e.value_ptr.*;
         if (Verbose) {
             try out.print("evaluate {} with {} \n", .{ deviceInfo.stateTopics, topic });
         }
@@ -293,7 +293,7 @@ fn callback(topic: []u8, message: []u8) !void {
                     try out.print("length {}\n", .{topic.len});
                 }
                 db.put(topic, message) catch |errStorage| {
-                    debug.warn("fail to store message {} for topic {}, on databasei with error {} \n", .{ message, topic, errStorage });
+                    debug.warn("fail to store message {s} for topic {s}, on database with error {} \n", .{ message, topic, errStorage });
                 };
             }
         }
@@ -426,7 +426,7 @@ fn launchProcess(monitoringInfo: *MonitoringInfo) !void {
 
         var m = std.BufMap.init(globalAllocator);
         // may add additional information about the process ...
-        try m.set("IOTMONITORMAGIC", bufferMagic[0..c.strlen(bufferMagic)]);
+        try m.put("IOTMONITORMAGIC", bufferMagic[0..c.strlen(bufferMagic)]);
 
         // execute the process
         const err = std.process.execve(globalAllocator, &argv, &m);
@@ -477,7 +477,7 @@ fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {
     var it = alldevices.iterator();
 
     while (it.next()) |deviceInfo| {
-        const device = deviceInfo.value;
+        const device = deviceInfo.value_ptr.*;
         // not on optional
         if (device.associatedProcessInformation) |infos| {
             // check if process has the magic Key
@@ -520,11 +520,11 @@ fn runAllMissings() !void {
     // run all missing processes
     var it = alldevices.iterator();
     while (it.next()) |deviceinfo| {
-        const device = deviceinfo.value;
+        const device = deviceinfo.value_ptr.*;
         if (device.associatedProcessInformation) |processinfo| {
             // this is a process monitored
             if (processinfo.*.pid == null) {
-                out.print("running ...{} \n", .{device.name}) catch unreachable;
+                out.print("running ...{s} \n", .{device.name}) catch unreachable;
                 // no pid associated to the info
                 //
                 launchProcess(device) catch {
@@ -541,7 +541,7 @@ fn checkProcessesAndRunMissing() !void {
     var it = alldevices.iterator();
 
     while (it.next()) |deviceInfo| {
-        const device = deviceInfo.value;
+        const device = deviceInfo.value_ptr.*;
         if (device.associatedProcessInformation) |infos| {
             infos.pid = null;
         }
@@ -636,7 +636,7 @@ pub fn main() !void {
 
     try out.writeAll("Connecting to mqtt ..\n");
 
-    try out.print("connecting to {} with user {}\n", .{ serverAddress, userName });
+    try out.print("connecting to {s} with user {s}\n", .{ serverAddress, userName });
 
     cnx = try mqtt.MqttCnx.init(globalAllocator, serverAddress, clientid, userName, password);
 
@@ -658,7 +658,7 @@ pub fn main() !void {
             const v = it.iterValue();
             if (v) |value| {
                 defer globalAllocator.destroy(value);
-                try out.print("sending initial stored state {} to {}\n", .{ value.*, subject.* });
+                try out.print("sending initial stored state {s} to {s}\n", .{ value.*, subject.* });
 
                 const topicWithSentinel = try globalAllocator.allocSentinel(u8, subject.*.len, 0);
                 defer globalAllocator.free(topicWithSentinel);
@@ -666,7 +666,7 @@ pub fn main() !void {
 
                 // if failed, stop the process
                 cnx.publish(topicWithSentinel, value.*) catch |e| {
-                    std.debug.warn("ERROR {} fail to publish initial state on topic {}", .{ e, topicWithSentinel });
+                    std.debug.warn("ERROR {} fail to publish initial state on topic {s}", .{ e, topicWithSentinel });
                     try out.print(".. state restoring done, listening mqtt topics\n", .{});
                 };
             }
@@ -688,7 +688,7 @@ pub fn main() !void {
         var iterator = alldevices.iterator();
         while (iterator.next()) |e| {
             // publish message
-            const deviceInfo = e.value;
+            const deviceInfo = e.value_ptr.*;
             const hasExpired = try deviceInfo.hasExpired();
             if (hasExpired) {
                 try publishDeviceTimeOut(deviceInfo);

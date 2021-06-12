@@ -610,7 +610,7 @@ fn parseTable(allocator: *std.mem.Allocator, name: []const u8, contents: []const
             if (contents[i] == '=') {
                 i = getNextChar(contents, i);
             } else {
-                std.debug.warn("{} {}\n", .{ name, key });
+                std.debug.warn("{s} {s}\n", .{ name, key });
                 return ParseError.ExpectedEquals;
             }
         }

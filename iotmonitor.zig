@@ -190,7 +190,12 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
 }
 
 const Config = struct {
-    clientId: []const u8, mqttBroker: []const u8, user: []const u8, password: []const u8, mqttIotmonitorBaseTopic: []u8
+    clientId: []const u8, 
+    mqttBroker: []const u8, 
+    user: []const u8, 
+    password: []const u8, 
+    clientid: []const u8, 
+    mqttIotmonitorBaseTopic: []u8
 };
 
 var MqttConfig: *Config = undefined;
@@ -242,6 +247,14 @@ fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename
         } else {
             return error.ConfigNoPassword;
         }
+
+        if (mqttconfig.getKey("clientid")) |cid| {
+            conf.clientid = cid.String;
+            try out.print("Using {s} as clientid \n", .{ conf.clientid });
+        } else {
+            conf.clientid = "iotmonitor";
+        }
+
 
         const topicBase = if (mqttconfig.getKey("baseTopic")) |baseTopic| baseTopic.String else "home/monitoring";
 
@@ -632,7 +645,7 @@ pub fn main() !void {
     var userName: []const u8 = MqttConfig.user;
     var password: []const u8 = MqttConfig.password;
 
-    var clientid: []const u8 = "clientid_iotmonitor";
+    var clientid: []const u8 = MqttConfig.clientid;
 
     try out.writeAll("Connecting to mqtt ..\n");
 

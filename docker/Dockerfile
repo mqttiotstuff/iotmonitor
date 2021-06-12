@@ -8,11 +8,10 @@ RUN apt-get install -y wget xz-utils
 RUN DEBIAN_FRONTEND="noninteractive" apt-get install -y cmake
 
 WORKDIR /build
-RUN wget https://ziglang.org/builds/zig-linux-x86_64-$VERSION+$COMMIT.tar.xz 
 
-RUN xz -d zig-linux-x86_64-$VERSION+$COMMIT.tar.xz
-RUN tar xvf zig-linux-x86_64-$VERSION+$COMMIT.tar
-
+COPY grabzigbinary.sh .
+RUN chmod a+x grabzigbinary.sh
+RUN ./grabzigbinary.sh $VERSION $COMMIT
 
 RUN git clone --recursive https://github.com/mqttiotstuff/iotmonitor
 WORKDIR /build/iotmonitor
@@ -23,7 +22,7 @@ RUN make
 WORKDIR /build/iotmonitor
 RUN mkdir bin
 
-RUN ../zig-linux-x86_64-$VERSION+$COMMIT/zig build
+RUN ../zigbundle/zig build
 
 FROM ubuntu:20.04
 

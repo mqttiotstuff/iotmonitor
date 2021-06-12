@@ -5,11 +5,15 @@ note that if you run the iotmonitor as a container, processes must be also hoste
 
 # Building the image using the zig master
 
-The COMMIT variable indicated the master commit to use, 
-The VERSION variable mention the master trunk version
+The VERSION variable mention the master version
+Optional, The COMMIT variable may be specified for the ZIG commit to use (zig dev repository), if not set, official RELEASE zig version IS used
 (check http://ziglang.org/downloads for the current value)
 
-	docker build --build-arg COMMIT=29928af60 --build-arg VERSION=0.8.0-dev.886 -t iotmonitor .
+for officiel release zig version:
+
+	docker build --build-arg VERSION=0.8.0 -t iotmonitor .
+
+	docker build --build-arg COMMIT=45212e3b3 --build-arg VERSION=0.9.0-dev.103 -t iotmonitor .
 
 # Running the container
 

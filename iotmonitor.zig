@@ -173,7 +173,7 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
         assert(helloValue.len > 0);
         device.helloTopic = helloValue;
         if (Verbose) {
-            _ = try out.print("hello topic for device {}\n", .{device.helloTopic});
+            _ = try out.print("hello topic for device {s}\n", .{device.helloTopic});
         }
     }
 
@@ -189,7 +189,14 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
     return device;
 }
 
-const Config = struct { clientId: []const u8, mqttBroker: []const u8, user: []const u8, password: []const u8, mqttIotmonitorBaseTopic: []u8 };
+const Config = struct {
+    clientId: []const u8, 
+    mqttBroker: []const u8, 
+    user: []const u8, 
+    password: []const u8, 
+    clientid: []const u8, 
+    mqttIotmonitorBaseTopic: []u8
+};
 
 var MqttConfig: *Config = undefined;
 
@@ -200,18 +207,18 @@ fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename
 
     var it = config.children.iterator();
     while (it.next()) |e| {
-        if (e.key.len >= 7) {
+        if (e.key_ptr.*.len >= 7) {
             const DEVICEPREFIX = "device_";
             const AGENTPREFIX = "agent_";
-            const isDevice = mem.eql(u8, e.key[0..DEVICEPREFIX.len], DEVICEPREFIX);
-            const isAgent = mem.eql(u8, e.key[0..AGENTPREFIX.len], AGENTPREFIX);
+            const isDevice = mem.eql(u8, e.key_ptr.*[0..DEVICEPREFIX.len], DEVICEPREFIX);
+            const isAgent = mem.eql(u8, e.key_ptr.*[0..AGENTPREFIX.len], AGENTPREFIX);
             if (isDevice or isAgent) {
                 if (Verbose) {
-                    try out.print("device found :{}\n", .{e.key});
+                    try out.print("device found :{}\n", .{e.key_ptr.*});
                 }
                 var prefixlen = AGENTPREFIX.len;
                 if (isDevice) prefixlen = DEVICEPREFIX.len;
-                const dev = try parseDevice(allocator, &e.key[prefixlen..], e.value);
+                const dev = try parseDevice(allocator, &e.key_ptr.*[prefixlen..], e.value_ptr.*);
                 if (Verbose) {
                     try out.print("add {} to device list, with watch {} and state {} \n", .{ dev.name, dev.watchTopics, dev.stateTopics });
                 }
@@ -240,6 +247,14 @@ fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename
         } else {
             return error.ConfigNoPassword;
         }
+
+        if (mqttconfig.getKey("clientid")) |cid| {
+            conf.clientid = cid.String;
+            try out.print("Using {s} as clientid \n", .{ conf.clientid });
+        } else {
+            conf.clientid = "iotmonitor";
+        }
+
 
         const topicBase = if (mqttconfig.getKey("baseTopic")) |baseTopic| baseTopic.String else "home/monitoring";
 
@@ -275,7 +290,7 @@ fn callback(topic: []u8, message: []u8) !void {
 
     // device loop
     while (iterator.next()) |e| {
-        const deviceInfo = e.value;
+        const deviceInfo = e.value_ptr.*;
         if (Verbose) {
             try out.print("evaluate {} with {} \n", .{ deviceInfo.stateTopics, topic });
         }
@@ -424,7 +439,7 @@ fn launchProcess(monitoringInfo: *MonitoringInfo) !void {
 
         var m = std.BufMap.init(globalAllocator);
         // may add additional information about the process ...
-        try m.set("IOTMONITORMAGIC", bufferMagic[0..c.strlen(bufferMagic)]);
+        try m.put("IOTMONITORMAGIC", bufferMagic[0..c.strlen(bufferMagic)]);
 
         // execute the process
         const err = std.process.execve(globalAllocator, &argv, &m);
@@ -475,7 +490,7 @@ fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {
     var it = alldevices.iterator();
 
     while (it.next()) |deviceInfo| {
-        const device = deviceInfo.value;
+        const device = deviceInfo.value_ptr.*;
         // not on optional
         if (device.associatedProcessInformation) |infos| {
             // check if process has the magic Key
@@ -518,7 +533,7 @@ fn runAllMissings() !void {
     // run all missing processes
     var it = alldevices.iterator();
     while (it.next()) |deviceinfo| {
-        const device = deviceinfo.value;
+        const device = deviceinfo.value_ptr.*;
         if (device.associatedProcessInformation) |processinfo| {
             // this is a process monitored
             if (processinfo.*.pid == null) {
@@ -539,7 +554,7 @@ fn checkProcessesAndRunMissing() !void {
     var it = alldevices.iterator();
 
     while (it.next()) |deviceInfo| {
-        const device = deviceInfo.value;
+        const device = deviceInfo.value_ptr.*;
         if (device.associatedProcessInformation) |infos| {
             infos.pid = null;
         }
@@ -611,6 +626,9 @@ fn publishDeviceTimeOut(device: *MonitoringInfo) !void {
 
 // main procedure
 pub fn main() !void {
+    try out.writeAll("IotMonitor start, version 0.2.2\n");
+    try out.writeAll("-------------------------------\n");
+
     alldevices = AllDevices.init(globalAllocator);
     const configurationFile = "config.toml";
     try out.writeAll("Reading the config file\n");
@@ -630,7 +648,7 @@ pub fn main() !void {
     var userName: []const u8 = MqttConfig.user;
     var password: []const u8 = MqttConfig.password;
 
-    var clientid: []const u8 = "clientid_iotmonitor";
+    var clientid: []const u8 = MqttConfig.clientid;
 
     try out.writeAll("Connecting to mqtt ..\n");
 
@@ -656,7 +674,7 @@ pub fn main() !void {
             const v = it.iterValue();
             if (v) |value| {
                 defer globalAllocator.destroy(value);
-                try out.print("sending initial stored state to {s}\n", .{subject.*});
+                try out.print("sending initial stored state {s} to {s}\n", .{ value.*, subject.* });
 
                 const topicWithSentinel = try globalAllocator.allocSentinel(u8, subject.*.len, 0);
                 defer globalAllocator.free(topicWithSentinel);
@@ -664,7 +682,7 @@ pub fn main() !void {
 
                 // if failed, stop the process
                 cnx.publish(topicWithSentinel, value.*) catch |e| {
-                    std.debug.warn("ERROR {} fail to publish initial state on topic {}", .{ e, topicWithSentinel });
+                    std.debug.warn("ERROR {} fail to publish initial state on topic {s}", .{ e, topicWithSentinel });
                     try out.print(".. state restoring done, listening mqtt topics\n", .{});
                 };
             }
@@ -686,7 +704,7 @@ pub fn main() !void {
         var iterator = alldevices.iterator();
         while (iterator.next()) |e| {
             // publish message
-            const deviceInfo = e.value;
+            const deviceInfo = e.value_ptr.*;
             const hasExpired = try deviceInfo.hasExpired();
             if (hasExpired) {
                 try publishDeviceTimeOut(deviceInfo);

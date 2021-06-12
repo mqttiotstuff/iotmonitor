@@ -1,5 +1,9 @@
 
-## Version 0.2.1
+## Version 0.2.2
+
+#### 2021-06-12
+        - add clientid in config to permit multiple instances of iotmonitor
+        - fix 0.8 compilation
 
 #### 2020-11-22
 	- move to zig release 0.7

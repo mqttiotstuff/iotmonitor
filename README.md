@@ -35,6 +35,8 @@ user=""
 password=""
 ```
 
+An optional clientid can also be specified to change the mqtt clientid, a default "iotmonitor" is provided
+
 
 #### Device declaration
 

@@ -196,7 +196,7 @@ pub fn LevelDBHashWithSerialization(
             // defer self.allocator.free(marshalledValue);
             cleveldb.leveldb_put(self.leveldbHandle, self.writeOptions, marshalledKey.ptr, marshalledKey.len, marshalledValue.ptr, marshalledValue.len, &err);
             if (err != null) {
-                debug.warn("{*}", .{"open failed"});
+                debug.warn("{s}", .{"open failed"});
                 defer cleveldb.leveldb_free(err);
                 return error.KEY_WRITE_FAILED;
             }

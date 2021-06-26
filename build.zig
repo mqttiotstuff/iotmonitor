@@ -18,7 +18,6 @@ pub fn build(b: *Builder) void {
 
     // stripping symbols reduce the size of the exe
     // exe.strip = true;
-
     exe.linkLibC();
 
     // static add the paho mqtt library

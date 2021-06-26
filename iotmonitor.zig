@@ -30,6 +30,7 @@ const stdoutFile = std.io.getStdOut();
 const out = std.fs.File.writer(stdoutFile);
 
 const Verbose = false;
+
 // This structure defines the process informations
 // with live agent running, this permit to track the process and
 // relaunch it if needed
@@ -40,6 +41,9 @@ const AdditionalProcessInformation = struct {
     // process identifier attributed by IOTMonitor, to track existing processes
     // processIdentifier: []const u8 = "",
     exec: []const u8 = "",
+
+    // last time the process is restarted
+    lastRestarted: c.time_t = null
 };
 
 const MonitoringInfo = struct {
@@ -141,6 +145,7 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
         const additionalStructure = try allocator.create(AdditionalProcessInformation);
         additionalStructure.exec = execCommand;
         additionalStructure.pid = null;
+        additionalStructure.lastRestarted = 0;
         device.associatedProcessInformation = additionalStructure;
     }
 
@@ -189,14 +194,7 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
     return device;
 }
 
-const Config = struct {
-    clientId: []const u8, 
-    mqttBroker: []const u8, 
-    user: []const u8, 
-    password: []const u8, 
-    clientid: []const u8, 
-    mqttIotmonitorBaseTopic: []u8
-};
+const Config = struct { clientId: []const u8, mqttBroker: []const u8, user: []const u8, password: []const u8, clientid: []const u8, mqttIotmonitorBaseTopic: []u8 };
 
 var MqttConfig: *Config = undefined;
 
@@ -250,11 +248,10 @@ fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename
 
         if (mqttconfig.getKey("clientid")) |cid| {
             conf.clientid = cid.String;
-            try out.print("Using {s} as clientid \n", .{ conf.clientid });
+            try out.print("Using {s} as clientid \n", .{conf.clientid});
         } else {
             conf.clientid = "iotmonitor";
         }
-
 
         const topicBase = if (mqttconfig.getKey("baseTopic")) |baseTopic| baseTopic.String else "home/monitoring";
 
@@ -268,6 +265,8 @@ fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename
     MqttConfig = conf;
 }
 
+// MQTT call back to handle the error handling and not
+// send the error to C paho library
 fn _external_callback(topic: []u8, message: []u8) void {
     callback(topic, message) catch {
         @panic("error in the callback");
@@ -336,7 +335,9 @@ fn callback(topic: []u8, message: []u8) !void {
                             if (mem.eql(u8, slice[0..topic.len], topic[0..])) {
                                 var stateTopic = itstorage.iterValue();
                                 if (stateTopic) |stateTopicValue| {
-                                    // try out.print("sending state {} to topic {}\n", .{ stateTopic.?.*, slice });
+                                    if (Verbose) {
+                                        try out.print("sending state {} to topic {}\n", .{ stateTopic.?.*, slice });
+                                    }
                                     defer globalAllocator.destroy(stateTopicValue);
                                     const topicWithSentinel = try globalAllocator.allocSentinel(u8, storedTopicValue.*.len, 0);
                                     defer globalAllocator.free(topicWithSentinel);
@@ -449,6 +450,11 @@ fn launchProcess(monitoringInfo: *MonitoringInfo) !void {
     } else {
         try out.print("process launched, pid : {}\n", .{pid});
         monitoringInfo.*.associatedProcessInformation.?.pid = pid;
+        _ = c.time(&monitoringInfo.*.associatedProcessInformation.?.lastRestarted);
+
+        // launch mqtt restart information process in monitoring
+        try publishProcessStarted(monitoringInfo);
+
     }
 }
 
@@ -528,9 +534,9 @@ fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {
 }
 
 fn runAllMissings() !void {
-
     // once all the process have been browsed,
     // run all missing processes
+    
     var it = alldevices.iterator();
     while (it.next()) |deviceinfo| {
         const device = deviceinfo.value_ptr.*;
@@ -585,6 +591,25 @@ fn publishWatchDog() !void {
         std.debug.warn("cannot publish watchdog message, will retryi \n", .{});
     };
 }
+
+fn publishProcessStarted(mi: *MonitoringInfo) !void {
+    var topicBufferPayload = try globalAllocator.alloc(u8, 512);
+    defer globalAllocator.free(topicBufferPayload);
+    secureZero(u8, topicBufferPayload);
+    _ = c.sprintf(topicBufferPayload.ptr, "%s/startedprocess/%s", MqttConfig.mqttIotmonitorBaseTopic.ptr, mi.name.ptr );
+
+    var bufferPayload = try globalAllocator.alloc(u8, 512);
+    defer globalAllocator.free(bufferPayload);
+    secureZero(u8, bufferPayload);
+    _ = c.sprintf(bufferPayload.ptr, "%d", mi.*.associatedProcessInformation.?.lastRestarted);
+
+    const topicloadLength = c.strlen(topicBufferPayload.ptr);
+    const payloadLength = c.strlen(bufferPayload.ptr);
+    cnx.publish(topicBufferPayload.ptr, bufferPayload[0..payloadLength]) catch {
+        std.debug.warn("cannot publish watchdog message, will retryi \n", .{});
+    };
+}
+
 
 fn publishDeviceMonitoringInfos(device: *MonitoringInfo) !void {
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);

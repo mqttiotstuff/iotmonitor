@@ -36,15 +36,14 @@ const Verbose = false;
 // relaunch it if needed
 //
 const AdditionalProcessInformation = struct {
-    // pid is to track the process while running
-    pid: ?i32 = undefined,
-    // process identifier attributed by IOTMonitor, to track existing processes
-    // processIdentifier: []const u8 = "",
-    exec: []const u8 = "",
+// pid is to track the process while running
+pid: ?i32 = undefined,
+// process identifier attributed by IOTMonitor, to track existing processes
+// processIdentifier: []const u8 = "",
+exec: []const u8 = "",
 
-    // last time the process is restarted
-    lastRestarted: c.time_t = null
-};
+// last time the process is restarted
+lastRestarted: c.time_t = null };
 
 const MonitoringInfo = struct {
     // name of the device
@@ -57,6 +56,7 @@ const MonitoringInfo = struct {
     helloTopicCount: u64 = 0,
     allocator: *mem.Allocator,
     // in case of process informations,
+    enabled: bool = true,
     associatedProcessInformation: ?*AdditionalProcessInformation = null,
 
     fn init(allocator: *mem.Allocator) !*MonitoringInfo {
@@ -67,6 +67,7 @@ const MonitoringInfo = struct {
         device.helloTopicCount = 0;
         device.timeoutValue = 30;
         device.associatedProcessInformation = null;
+        device.enabled = true;
 
         return device;
     }
@@ -298,6 +299,9 @@ fn callback(topic: []u8, message: []u8) !void {
         const helloTopic = deviceInfo.helloTopic;
         if (storeTopic) |store| {
             if (try topics.doesTopicBelongTo(topic, store)) |sub| {
+
+                // always store topic, even if the monitoring is not enabled
+
                 // store sub topic in leveldb
                 // trigger the refresh for timeout
                 if (Verbose) {
@@ -333,21 +337,25 @@ fn callback(topic: []u8, message: []u8) !void {
                         if (storedTopicValue.len >= topic.len) {
                             const slice = storedTopicValue.*;
                             if (mem.eql(u8, slice[0..topic.len], topic[0..])) {
-                                var stateTopic = itstorage.iterValue();
-                                if (stateTopic) |stateTopicValue| {
-                                    if (Verbose) {
-                                        try out.print("sending state {} to topic {}\n", .{ stateTopic.?.*, slice });
-                                    }
-                                    defer globalAllocator.destroy(stateTopicValue);
-                                    const topicWithSentinel = try globalAllocator.allocSentinel(u8, storedTopicValue.*.len, 0);
-                                    defer globalAllocator.free(topicWithSentinel);
-                                    mem.copy(u8, topicWithSentinel[0..], storedTopicValue.*);
+                                if (deviceInfo.enabled) {
+                                    // send the state only if the monitoring is enabled
 
-                                    // resend state
-                                    cnx.publish(topicWithSentinel, stateTopicValue.*) catch |errorMqtt| {
-                                        std.debug.warn("ERROR {} fail to publish initial state on topic {}", .{ errorMqtt, topicWithSentinel });
-                                        try out.print(".. state restoring done, listening mqtt topics\n", .{});
-                                    };
+                                    var stateTopic = itstorage.iterValue();
+                                    if (stateTopic) |stateTopicValue| {
+                                        if (Verbose) {
+                                            try out.print("sending state {} to topic {}\n", .{ stateTopic.?.*, slice });
+                                        }
+                                        defer globalAllocator.destroy(stateTopicValue);
+                                        const topicWithSentinel = try globalAllocator.allocSentinel(u8, storedTopicValue.*.len, 0);
+                                        defer globalAllocator.free(topicWithSentinel);
+                                        mem.copy(u8, topicWithSentinel[0..], storedTopicValue.*);
+
+                                        // resend state
+                                        cnx.publish(topicWithSentinel, stateTopicValue.*) catch |errorMqtt| {
+                                            std.debug.warn("ERROR {} fail to publish initial state on topic {}", .{ errorMqtt, topicWithSentinel });
+                                            try out.print(".. state restoring done, listening mqtt topics\n", .{});
+                                        };
+                                    }
                                 }
                             }
                         }
@@ -454,7 +462,6 @@ fn launchProcess(monitoringInfo: *MonitoringInfo) !void {
 
         // launch mqtt restart information process in monitoring
         try publishProcessStarted(monitoringInfo);
-
     }
 }
 
@@ -536,19 +543,24 @@ fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {
 fn runAllMissings() !void {
     // once all the process have been browsed,
     // run all missing processes
-    
+
     var it = alldevices.iterator();
     while (it.next()) |deviceinfo| {
         const device = deviceinfo.value_ptr.*;
         if (device.associatedProcessInformation) |processinfo| {
             // this is a process monitored
-            if (processinfo.*.pid == null) {
-                out.print("running ...{s} \n", .{device.name}) catch unreachable;
-                // no pid associated to the info
-                //
-                launchProcess(device) catch {
-                    @panic("fail to run process");
-                };
+            if (device.enabled) {
+                if (processinfo.*.pid == null) {
+                    out.print("running ...{s} \n", .{device.name}) catch unreachable;
+                    // no pid associated to the info
+                    //
+                    launchProcess(device) catch {
+                        @panic("fail to run process");
+                    };
+                }
+            } else {
+                // monitoring not enabled
+
             }
         }
     }
@@ -596,7 +608,7 @@ fn publishProcessStarted(mi: *MonitoringInfo) !void {
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(topicBufferPayload);
     secureZero(u8, topicBufferPayload);
-    _ = c.sprintf(topicBufferPayload.ptr, "%s/startedprocess/%s", MqttConfig.mqttIotmonitorBaseTopic.ptr, mi.name.ptr );
+    _ = c.sprintf(topicBufferPayload.ptr, "%s/startedprocess/%s", MqttConfig.mqttIotmonitorBaseTopic.ptr, mi.name.ptr);
 
     var bufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(bufferPayload);
@@ -609,7 +621,6 @@ fn publishProcessStarted(mi: *MonitoringInfo) !void {
         std.debug.warn("cannot publish watchdog message, will retryi \n", .{});
     };
 }
-
 
 fn publishDeviceMonitoringInfos(device: *MonitoringInfo) !void {
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
@@ -649,6 +660,26 @@ fn publishDeviceTimeOut(device: *MonitoringInfo) !void {
     };
 }
 
+fn indexHandler(req: Request, res: Response) !void {
+     try res.write("IotMonitor version 0.2.2");
+}
+
+const Address = std.net.Address;
+usingnamespace @import("routez");
+
+const Thread = std.Thread;
+
+
+var server : Server = undefined;
+var addr : Address = undefined;
+
+const ServerCtx = struct {};
+fn startServer(context: ServerCtx) void {
+    server.listen(addr) catch {
+        @panic("cannot start listening http server");
+    };
+}
+
 // main procedure
 pub fn main() !void {
     try out.writeAll("IotMonitor start, version 0.2.2\n");
@@ -680,6 +711,21 @@ pub fn main() !void {
     try out.print("connecting to {s} with user {s}\n", .{ serverAddress, userName });
 
     cnx = try mqtt.MqttCnx.init(globalAllocator, serverAddress, clientid, userName, password);
+
+    try out.print("start embedded http server\n", .{});
+    server = Server.init(
+        globalAllocator,
+        .{},
+        .{
+            all("/", indexHandler)
+        },
+    );
+    addr = try Address.parseIp("127.0.0.1", 8079);
+
+    const threadHandle = try Thread.spawn(startServer, .{});
+    
+
+    
 
     try out.print("checking running monitored processes\n", .{});
 
@@ -730,11 +776,15 @@ pub fn main() !void {
         while (iterator.next()) |e| {
             // publish message
             const deviceInfo = e.value_ptr.*;
-            const hasExpired = try deviceInfo.hasExpired();
-            if (hasExpired) {
-                try publishDeviceTimeOut(deviceInfo);
+
+            if (deviceInfo.enabled) {
+            
+                const hasExpired = try deviceInfo.hasExpired();
+                if (hasExpired) {
+                    try publishDeviceTimeOut(deviceInfo);
+                }
+                try publishDeviceMonitoringInfos(deviceInfo);
             }
-            try publishDeviceMonitoringInfos(deviceInfo);
         }
     }
 

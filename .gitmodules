@@ -1,3 +1,6 @@
 [submodule "paho.mqtt.c"]
 	path = paho.mqtt.c
 	url = https://github.com/eclipse/paho.mqtt.c
+[submodule "routez"]
+	path = routez
+	url = https://github.com/Vexu/routez

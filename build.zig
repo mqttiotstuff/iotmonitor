@@ -13,6 +13,19 @@ pub fn build(b: *Builder) void {
 
     exe.addPackagePath("toml", "zig-toml/src/toml.zig");
 
+    exe.addPackage(.{
+        .name = "routez",
+        .path = "routez/src/routez.zig",
+        .dependencies = &[_]std.build.Pkg{.{
+            .name = "zuri",
+            .path = "routez/zuri/src/zuri.zig",
+        }},
+    });
+
+    // exe.addPackagePath("zuri", "routez/zuri/src/zuri.zig");
+    // exe.addPackagePath("routez", "routez/src/routez.zig");
+    
+    
     exe.setOutputDir("bin");
     // exe.setTarget(.{ .cpu = builtin.Arch.arm });
 

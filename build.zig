@@ -21,17 +21,19 @@ pub fn build(b: *Builder) void {
             .path = "routez/zuri/src/zuri.zig",
         }},
     });
-    exe.addPackage(.{
-        .name = "tracy",
-        .path = "zig-tracy/src/lib.zig"
-    });
 
+    const Activate_Tracy = false;
 
+    if (Activate_Tracy) {
+        exe.addPackage(.{ .name = "tracy", .path = "zig-tracy/src/lib.zig" });
 
-    // exe.addPackagePath("zuri", "routez/zuri/src/zuri.zig");
-    // exe.addPackagePath("routez", "routez/src/routez.zig");
-    
-    
+        exe.addIncludeDir("tracy/");
+        exe.addLibPath("tracy/library/unix");
+        exe.linkSystemLibrary("tracy-debug");
+    } else {
+        exe.addPackage(.{ .name = "tracy", .path = "nozig-tracy/src/lib.zig" });
+    }
+
     exe.setOutputDir("bin");
     // exe.setTarget(.{ .cpu = builtin.Arch.arm });
 
@@ -43,10 +45,6 @@ pub fn build(b: *Builder) void {
     exe.addLibPath("paho.mqtt.c/build/output");
     exe.addLibPath("paho.mqtt.c/src");
     exe.addObjectFile("paho.mqtt.c/src/libpaho-mqtt3c.a");
-
-    exe.addIncludeDir("tracy/");
-    exe.addLibPath("tracy/library/unix");
-    exe.linkSystemLibrary("tracy-debug");
 
     // these libs are needed by leveldb backend
     exe.linkSystemLibrary("leveldb");

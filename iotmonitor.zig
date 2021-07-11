@@ -778,7 +778,7 @@ pub fn main() !void {
 
     try out.writeAll("Connecting to mqtt ..\n");
 
-    try out.print("connecting to {s} with user {s}\n", .{ serverAddress, userName });
+    try out.print("connecting to {s} with user {s} and clientid {s}\n", .{ serverAddress, userName , clientid});
 
     cnx = try mqtt.MqttCnx.init(globalAllocator, serverAddress, clientid, userName, password);
 

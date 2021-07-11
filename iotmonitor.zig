@@ -27,6 +27,9 @@ const processlib = @import("processlib.zig");
 const topics = @import("topics.zig");
 const toml = @import("toml");
 
+// profiling
+const tracy = @import("tracy");
+
 const stdoutFile = std.io.getStdOut();
 const out = std.fs.File.writer(stdoutFile);
 
@@ -201,14 +204,17 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
 }
 
 const Config = struct { clientId: []const u8, mqttBroker: []const u8, user: []const u8, password: []const u8, clientid: []const u8, mqttIotmonitorBaseTopic: []u8 };
-const HttpServerConfig = struct { activateHttp: bool = true, 
-                                  listenAddress: []const u8, port: u16 = 8079 };
+const HttpServerConfig = struct { activateHttp: bool = true, listenAddress: []const u8, port: u16 = 8079 };
 
 var MqttConfig: *Config = undefined;
 var HttpConfig: *HttpServerConfig = undefined;
 
 fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename: []const u8) !void {
+    const t = tracy.trace(@src());
+    defer t.end();
+
     // getting config parameters
+
     var config = try toml.parseFile(allocator, filename);
     defer config.deinit();
 
@@ -305,6 +311,8 @@ fn _external_callback(topic: []u8, message: []u8) void {
 
 // MQTT Callback implementation
 fn callback(topic: []u8, message: []u8) !void {
+    const t = tracy.trace(@src());
+    defer t.end();
 
     // MQTT callback
     if (Verbose) {
@@ -596,6 +604,8 @@ fn runAllMissings() !void {
 }
 
 fn checkProcessesAndRunMissing() !void {
+    const t = tracy.trace(@src());
+    defer t.end();
 
     // RAZ pid infos
     var it = alldevices.iterator();
@@ -614,6 +624,9 @@ fn checkProcessesAndRunMissing() !void {
 // this function publish a watchdog for the iotmonitor process
 // this permit to check if the monitoring is up
 fn publishWatchDog() !void {
+    const t = tracy.trace(@src());
+    defer t.end();
+
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(topicBufferPayload);
     secureZero(u8, topicBufferPayload);
@@ -633,6 +646,9 @@ fn publishWatchDog() !void {
 }
 
 fn publishProcessStarted(mi: *MonitoringInfo) !void {
+    const t = tracy.trace(@src());
+    defer t.end();
+
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(topicBufferPayload);
     secureZero(u8, topicBufferPayload);
@@ -695,14 +711,15 @@ const JSONStatus = struct {
 };
 
 fn indexHandler(req: Request, res: Response) !void {
+    const t = tracy.trace(@src());
+    defer t.end();
+
     var iterator = alldevices.iterator();
     try res.setType("application/json");
     try res.body.writeAll("[");
     var hasone = false;
     while (iterator.next()) |e| {
         const deviceInfo = e.value_ptr.*;
-
-        // if (deviceInfo.enabled) {
         if (hasone) {
             try res.body.writeAll(",");
         }
@@ -711,7 +728,6 @@ fn indexHandler(req: Request, res: Response) !void {
 
         try json.stringify(j, json.StringifyOptions{}, res.body);
         hasone = true;
-        //}
     }
     try res.body.writeAll("]");
     // try res.write("IotMonitor version 0.2.2");
@@ -820,21 +836,26 @@ pub fn main() !void {
     while (true) {
         _ = c.sleep(1); // every 1 seconds
 
-        try checkProcessesAndRunMissing();
-        try publishWatchDog();
+        {
+            const t = tracy.trace(@src());
+            defer t.end();
 
-        var iterator = alldevices.iterator();
-        while (iterator.next()) |e| {
-            // publish message
-            const deviceInfo = e.value_ptr.*;
+            try checkProcessesAndRunMissing();
+            try publishWatchDog();
 
-            if (deviceInfo.enabled) {
-                // if the device is enabled
-                const hasExpired = try deviceInfo.hasExpired();
-                if (hasExpired) {
-                    try publishDeviceTimeOut(deviceInfo);
+            var iterator = alldevices.iterator();
+            while (iterator.next()) |e| {
+                // publish message
+                const deviceInfo = e.value_ptr.*;
+
+                if (deviceInfo.enabled) {
+                    // if the device is enabled
+                    const hasExpired = try deviceInfo.hasExpired();
+                    if (hasExpired) {
+                        try publishDeviceTimeOut(deviceInfo);
+                    }
+                    try publishDeviceMonitoringInfos(deviceInfo);
                 }
-                try publishDeviceMonitoringInfos(deviceInfo);
             }
         }
     }

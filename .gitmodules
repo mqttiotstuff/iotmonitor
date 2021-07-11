@@ -4,3 +4,9 @@
 [submodule "routez"]
 	path = routez
 	url = https://github.com/Vexu/routez
+[submodule "zig-tracy"]
+	path = zig-tracy
+	url = https://github.com/nektro/zig-tracy
+[submodule "tracy"]
+	path = tracy
+	url = https://github.com/wolfpld/tracy

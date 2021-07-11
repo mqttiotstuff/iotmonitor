@@ -5,6 +5,7 @@
 //
 
 const std = @import("std");
+const json = std.json;
 const debug = std.debug;
 const assert = debug.assert;
 const mem = std.mem;
@@ -55,8 +56,12 @@ const MonitoringInfo = struct {
     helloTopic: ?[]const u8 = null,
     helloTopicCount: u64 = 0,
     allocator: *mem.Allocator,
+
     // in case of process informations,
+    // used to relaunch or not the process, permitting to
+    // take a process out of the monitoring, and then reintegrate it
     enabled: bool = true,
+
     associatedProcessInformation: ?*AdditionalProcessInformation = null,
 
     fn init(allocator: *mem.Allocator) !*MonitoringInfo {
@@ -196,8 +201,11 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
 }
 
 const Config = struct { clientId: []const u8, mqttBroker: []const u8, user: []const u8, password: []const u8, clientid: []const u8, mqttIotmonitorBaseTopic: []u8 };
+const HttpServerConfig = struct { activateHttp: bool = true, 
+                                  listenAddress: []const u8, port: u16 = 8079 };
 
 var MqttConfig: *Config = undefined;
+var HttpConfig: *HttpServerConfig = undefined;
 
 fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename: []const u8) !void {
     // getting config parameters
@@ -222,6 +230,8 @@ fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename
                     try out.print("add {} to device list, with watch {} and state {} \n", .{ dev.name, dev.watchTopics, dev.stateTopics });
                 }
                 _ = try _alldevices.put(dev.name, dev);
+            } else {
+                try out.print("bad prefix for section :{s} , only device_ or agent_ accepted, skipped \n", .{e.key_ptr});
             }
         }
     }
@@ -263,6 +273,25 @@ fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename
         return error.ConfignoMqtt;
     }
 
+    const httpconf = try allocator.create(HttpServerConfig);
+
+    if (config.getTable("http")) |httpconfig| {
+        httpconf.*.activateHttp = true;
+
+        if (httpconfig.getKey("bind")) |baddr| {
+            httpconf.*.listenAddress = baddr.String;
+        } else {
+            httpconf.*.listenAddress = "127.0.0.1";
+        }
+
+        if (httpconfig.getKey("port")) |port| {
+            httpconf.*.port = @intCast(u16, port.Integer);
+        } else {
+            httpconf.*.port = 8079;
+        }
+    }
+
+    HttpConfig = httpconf;
     MqttConfig = conf;
 }
 
@@ -595,10 +624,9 @@ fn publishWatchDog() !void {
     secureZero(u8, bufferPayload);
     cpt = (cpt + 1) % 1_000_000;
     _ = c.sprintf(bufferPayload.ptr, "%d", cpt);
-    cpt = (cpt + 1) % 1_000_000;
-    _ = c.sprintf(bufferPayload.ptr, "%d", cpt);
     const topicloadLength = c.strlen(topicBufferPayload.ptr);
     const payloadLength = c.strlen(bufferPayload.ptr);
+
     cnx.publish(topicBufferPayload.ptr, bufferPayload[0..payloadLength]) catch {
         std.debug.warn("cannot publish watchdog message, will retryi \n", .{});
     };
@@ -660,8 +688,34 @@ fn publishDeviceTimeOut(device: *MonitoringInfo) !void {
     };
 }
 
+const JSONStatus = struct {
+    name: []const u8,
+    enabled: bool = true,
+    expired: bool,
+};
+
 fn indexHandler(req: Request, res: Response) !void {
-     try res.write("IotMonitor version 0.2.2");
+    var iterator = alldevices.iterator();
+    try res.setType("application/json");
+    try res.body.writeAll("[");
+    var hasone = false;
+    while (iterator.next()) |e| {
+        const deviceInfo = e.value_ptr.*;
+
+        // if (deviceInfo.enabled) {
+        if (hasone) {
+            try res.body.writeAll(",");
+        }
+        const j = JSONStatus{ .name = deviceInfo.name[0 .. deviceInfo.name.len - 1], .enabled = deviceInfo.enabled, .expired = try deviceInfo.hasExpired() };
+        // create a json response associated
+
+        try json.stringify(j, json.StringifyOptions{}, res.body);
+        hasone = true;
+        //}
+    }
+    try res.body.writeAll("]");
+    // try res.write("IotMonitor version 0.2.2");
+
 }
 
 const Address = std.net.Address;
@@ -669,10 +723,10 @@ usingnamespace @import("routez");
 
 const Thread = std.Thread;
 
+var server: Server = undefined;
+var addr: Address = undefined;
 
-var server : Server = undefined;
-var addr : Address = undefined;
-
+// http server context
 const ServerCtx = struct {};
 fn startServer(context: ServerCtx) void {
     server.listen(addr) catch {
@@ -712,23 +766,20 @@ pub fn main() !void {
 
     cnx = try mqtt.MqttCnx.init(globalAllocator, serverAddress, clientid, userName, password);
 
-    try out.print("start embedded http server\n", .{});
-    server = Server.init(
-        globalAllocator,
-        .{},
-        .{
-            all("/", indexHandler)
-        },
-    );
-    addr = try Address.parseIp("127.0.0.1", 8079);
+    if (HttpConfig.activateHttp) {
+        try out.print("start embedded http server on port {} \n", .{HttpConfig.*.port});
+        server = Server.init(
+            globalAllocator,
+            .{},
+            .{all("/", indexHandler)},
+        );
+        addr = try Address.parseIp(HttpConfig.*.listenAddress, HttpConfig.*.port);
 
-    const threadHandle = try Thread.spawn(startServer, .{});
-    
-
-    
+        const threadHandle = try Thread.spawn(startServer, .{});
+        try out.print("http server thread launched\n", .{});
+    }
 
     try out.print("checking running monitored processes\n", .{});
-
     try checkProcessesAndRunMissing();
 
     try out.print("restoring saved states topics ... \n", .{});
@@ -767,7 +818,7 @@ pub fn main() !void {
     _ = try cnx.register("#");
 
     while (true) {
-        _ = c.sleep(1); // in seconds
+        _ = c.sleep(1); // every 1 seconds
 
         try checkProcessesAndRunMissing();
         try publishWatchDog();
@@ -778,7 +829,7 @@ pub fn main() !void {
             const deviceInfo = e.value_ptr.*;
 
             if (deviceInfo.enabled) {
-            
+                // if the device is enabled
                 const hasExpired = try deviceInfo.hasExpired();
                 if (hasExpired) {
                     try publishDeviceTimeOut(deviceInfo);

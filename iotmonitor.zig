@@ -10,6 +10,8 @@ const debug = std.debug;
 const assert = debug.assert;
 const mem = std.mem;
 const os = std.os;
+const io = std.io;
+const version = @import("version.zig");
 
 // used for sleep, and other, it may be removed
 // to relax libC needs
@@ -26,6 +28,7 @@ const mqtt = @import("mqttlib.zig");
 const processlib = @import("processlib.zig");
 const topics = @import("topics.zig");
 const toml = @import("toml");
+const clap = @import("clap");
 
 // profiling
 const tracy = @import("tracy");
@@ -285,9 +288,9 @@ fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename
         httpconf.*.activateHttp = true;
 
         if (httpconfig.getKey("bind")) |baddr| {
-            httpconf.*.listenAddress = baddr.String;
+            httpconf.listenAddress = baddr.String;
         } else {
-            httpconf.*.listenAddress = "127.0.0.1";
+            httpconf.listenAddress = "127.0.0.1";
         }
 
         if (httpconfig.getKey("port")) |port| {
@@ -752,13 +755,47 @@ fn startServer(context: ServerCtx) void {
 
 // main procedure
 pub fn main() !void {
-    try out.writeAll("IotMonitor start, version 0.2.2\n");
+    const params = comptime [_]clap.Param(clap.Help){
+        clap.parseParam("-h, --help             Display this help") catch unreachable,
+        clap.parseParam("<TOML CONFIG FILE>...") catch unreachable,
+    };
+    var diag = clap.Diagnostic{};
+    var args = clap.parse(clap.Help, &params, .{ .diagnostic = &diag }) catch |err| {
+        // Report useful error and exit
+        diag.report(io.getStdErr().writer(), err) catch {};
+        return err;
+    };
+    defer args.deinit();
+
+    try out.writeAll("IotMonitor start, version");
+    try out.writeAll(version.version);
+    try out.writeAll("\n");
     try out.writeAll("-------------------------------\n");
 
-    alldevices = AllDevices.init(globalAllocator);
+    if (args.flag("--help")) {
+        debug.print("\n", .{});
+        debug.print("\n", .{});
+        debug.print("start the iotmonitor deamon, usage :", .{});
+        debug.print("    iotmonitor [optional config.toml filepath]", .{});
+        return;
+    }
+
+    for (args.positionals()) |pos| {
+        debug.print("{s}\n", .{pos});
+    }
+
     const configurationFile = "config.toml";
     try out.writeAll("Reading the config file\n");
 
+    // Friendly error if the file does not exists
+    var openedtestfile = std.os.open(configurationFile, std.os.O_RDONLY, 0) catch |e| {
+        try out.writeAll("Cannot open file config.toml\n");
+        // try debug.print(e);
+        return;
+    };
+    std.os.close(openedtestfile);
+
+    alldevices = AllDevices.init(globalAllocator);
     try parseTomlConfig(globalAllocator, &alldevices, configurationFile);
 
     try out.writeAll("Opening database\n");
@@ -773,17 +810,16 @@ pub fn main() !void {
     var serverAddress: []const u8 = MqttConfig.mqttBroker;
     var userName: []const u8 = MqttConfig.user;
     var password: []const u8 = MqttConfig.password;
-
     var clientid: []const u8 = MqttConfig.clientid;
 
     try out.writeAll("Connecting to mqtt ..\n");
 
-    try out.print("connecting to {s} with user {s} and clientid {s}\n", .{ serverAddress, userName , clientid});
+    try out.print("    connecting to \"{s}\" with user \"{s}\" and clientid \"{s}\"\n", .{ serverAddress, userName, clientid });
 
     cnx = try mqtt.MqttCnx.init(globalAllocator, serverAddress, clientid, userName, password);
 
     if (HttpConfig.activateHttp) {
-        try out.print("start embedded http server on port {} \n", .{HttpConfig.*.port});
+        try out.print("Start embedded http server on port {} \n", .{HttpConfig.*.port});
         server = Server.init(
             globalAllocator,
             .{},
@@ -792,13 +828,13 @@ pub fn main() !void {
         addr = try Address.parseIp(HttpConfig.*.listenAddress, HttpConfig.*.port);
 
         const threadHandle = try Thread.spawn(startServer, .{});
-        try out.print("http server thread launched\n", .{});
+        try out.print("Http server thread launched\n", .{});
     }
 
-    try out.print("checking running monitored processes\n", .{});
+    try out.print("Checking running monitored processes\n", .{});
     try checkProcessesAndRunMissing();
 
-    try out.print("restoring saved states topics ... \n", .{});
+    try out.print("Restoring saved states topics ... \n", .{});
     // read all elements in database, then redefine the state for all
     const it = try db.iterator();
     defer globalAllocator.destroy(it);
@@ -812,7 +848,7 @@ pub fn main() !void {
             const v = it.iterValue();
             if (v) |value| {
                 defer globalAllocator.destroy(value);
-                try out.print("sending initial stored state {s} to {s}\n", .{ value.*, subject.* });
+                try out.print("Sending initial stored state {s} to {s}\n", .{ value.*, subject.* });
 
                 const topicWithSentinel = try globalAllocator.allocSentinel(u8, subject.*.len, 0);
                 defer globalAllocator.free(topicWithSentinel);
@@ -821,26 +857,29 @@ pub fn main() !void {
                 // if failed, stop the process
                 cnx.publish(topicWithSentinel, value.*) catch |e| {
                     std.debug.warn("ERROR {} fail to publish initial state on topic {s}", .{ e, topicWithSentinel });
-                    try out.print(".. state restoring done, listening mqtt topics\n", .{});
+                    try out.print(".. State restoring done, listening mqtt topics\n", .{});
                 };
             }
         }
         it.next();
     }
-    try out.print(".. state restoring done, listening mqtt topics\n", .{});
+    try out.print(".. State restoring done, listening mqtt topics\n", .{});
     cnx.callBack = _external_callback;
 
     // register to all, it may be huge, and probably not scaling
     _ = try cnx.register("#");
 
-    while (true) {
+    while (true) { // main loop
         _ = c.sleep(1); // every 1 seconds
 
         {
+            // if activated trace this function
             const t = tracy.trace(@src());
             defer t.end();
 
+            // check process that has falled down, and must be restarted
             try checkProcessesAndRunMissing();
+            // watchdog
             try publishWatchDog();
 
             var iterator = alldevices.iterator();

@@ -8,10 +8,13 @@ const Target = std.Target;
 
 pub fn build(b: *Builder) void {
     const exe = b.addExecutable("iotmonitor", "iotmonitor.zig");
-    // exe.setBuildMode(builtin.Mode.Debug);
-    // exe.setBuildMode(builtin.Mode.ReleaseSafe);
+
+    const target = b.standardTargetOptions(.{});
+    exe.setTarget(target);
+    exe.setBuildMode(b.standardReleaseOptions());
 
     exe.addPackagePath("toml", "zig-toml/src/toml.zig");
+    exe.addPackagePath("clap", "zig-clap/clap.zig");
 
     exe.addPackage(.{
         .name = "routez",

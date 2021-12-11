@@ -103,7 +103,7 @@ for building the project, the following elements are needed :
 - leveldb library (used for storing stated)
 - C compiler (builds essentials)
 - cmake
-- zig : 0.8
+- zig : 0.8.0
 
 then launch the following commands :
 
@@ -116,7 +116,7 @@ make
 cd ..
 
 mkdir bin
-zig build
+zig build -Dcpu=baseline -Dtarget=native-native-gnu
 ```
 	
 ### Credits
@@ -124,4 +124,5 @@ zig build
 - zig-toml : for zig toml parser
 - paho eclipse mqtt c library
 - levedb database
+- routez : for http server integration
 

@@ -1,0 +1,12 @@
+
+    Name: The name of the command and a pithy one-liner that describes its function.
+    Synopsis: A terse description of the invocations someone can use to launch the program. These show the types of accepted command-line parameters.
+    Description: A description of the command or function.
+    Options: A list of command-line options, and what they do.
+    Examples: Some examples of common usage.
+    Exit Values: The possible return codes and their meanings.
+    Bugs: A list of known bugs and quirks. Sometimes, this is supplemented with (or replaced by) a link to the issue tracker for the project.
+    Author: The person or people who wrote the command.
+    Copyright: Your copyright message. These also usually include the type of license under which the program is released.
+
+

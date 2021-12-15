@@ -134,6 +134,7 @@ pub fn secureZero(comptime T: type, s: []T) void {
     // see that it can be replaced by a memset.
     const ptr = @ptrCast([*]volatile u8, s.ptr);
     const length = s.len * @sizeOf(T);
+    // add 0 at the end of the alloc array
     @memset(ptr, 0, length);
 }
 
@@ -734,7 +735,6 @@ fn indexHandler(req: Request, res: Response) !void {
     }
     try res.body.writeAll("]");
     // try res.write("IotMonitor version 0.2.2");
-
 }
 
 const Address = std.net.Address;
@@ -775,8 +775,9 @@ pub fn main() !void {
     if (args.flag("--help")) {
         debug.print("\n", .{});
         debug.print("\n", .{});
-        debug.print("start the iotmonitor deamon, usage :", .{});
-        debug.print("    iotmonitor [optional config.toml filepath]", .{});
+        debug.print("start the iotmonitor deamon, usage :\n", .{});
+        debug.print("    iotmonitor [optional config.toml filepath]\n", .{});
+        debug.print("\n\n\n");
         return;
     }
 

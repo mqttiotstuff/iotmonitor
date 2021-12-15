@@ -10,3 +10,5 @@
     Copyright: Your copyright message. These also usually include the type of license under which the program is released.
 
 
+copy to /usr/share/man/man1
+

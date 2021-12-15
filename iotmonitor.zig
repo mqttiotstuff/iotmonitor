@@ -777,7 +777,7 @@ pub fn main() !void {
         debug.print("\n", .{});
         debug.print("start the iotmonitor deamon, usage :\n", .{});
         debug.print("    iotmonitor [optional config.toml filepath]\n", .{});
-        debug.print("\n\n\n");
+        debug.print("\n\n\n", .{});
         return;
     }
 

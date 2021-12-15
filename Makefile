@@ -7,8 +7,9 @@ iotmonitor:
 	cd paho.mqtt.c && make 
 	mkdir -p bin
 	zig build 
+	pandoc man/iotmonitor.1.md -s -t man | gzip -c > bin/iotmonitor.1.gz
 
 install: 
 	cp bin/iotmonitor $(BINDIR)
-	pandoc man/iotmonitor.1.md -s -t man | gzip -c > $(MANDIR)/iotmonitor.1.gz
+	cp bin/iotmonitor.1.gz $(MANDIR)/
 

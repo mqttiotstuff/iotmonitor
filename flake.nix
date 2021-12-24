@@ -14,7 +14,7 @@
       with import nixpkgs { system = "x86_64-linux"; };
       stdenv.mkDerivation {
         name = "iotmonitor";
-        src = self
+        src = self;
         buildInputs = [ zig git cmake leveldb pandoc ];
         configurePhase = ''
           ls

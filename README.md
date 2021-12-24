@@ -5,7 +5,7 @@
 IotMonitor is an effortless and lightweight mqtt monitoring for devices (things) and agents on Linux. 
 
 IotMonitor aims to solve the "always up" problem of large IOT devices and agents system. This project is successfully used every day for running smart home automation system.
-Considering large and longlived running mqtt systems can hardly rely only on monolytics plateforms, the reality is always composite as some agents or functionnalities increase with time. Diversity also occurs in running several programming languages implementation for agents. 
+Considering large and longlived running mqtt systems can hardly rely only on monolytics plateforms, the reality is always composite as some agents or functionalities increase with time. Diversity also occurs in running several programming languages implementation for agents. 
 
 This project offers a simple command line, as in *nix system, to monitor MQTT device or agents system. MQTT based communication devices (IOT) and agents are watched, and alerts are emitted if devices or agents are not responding any more. Declared software agents are restarted by iotmonitor when crashed. 
 
@@ -18,6 +18,78 @@ IotMonitor use a TOML config file. Each device has an independent configured com
 This topic can then be displayed or alerted to inform that the device or agent is not working properly.
 
 This project is based on C Paho MQTT client library, use leveldb as state database.
+
+
+
+### Running the project on linux
+
+#### Using Nix
+
+Install Nix, [https://nixos.org/download.html](https://nixos.org/download.html)
+
+
+
+then, using the following `shell.nix` file, 
+
+```
+{ nixpkgs ? <nixpkgs>, iotstuff ? import (fetchTarball
+  "https://github.com/mqttiotstuff/nix-iotstuff-repo/archive/9b12720.tar.gz")
+  { } }:
+
+iotstuff.pkgs.mkShell rec { buildInputs = [ iotstuff.iotmonitor ]; }
+```
+
+run :
+
+```
+nix-shell shell.nix
+```
+
+or :  (with the shell.nix in the folder)
+
+```
+nix-shell
+```
+
+
+
+#### Using docker, 
+
+[see README in docker subfolder, for details and construct the image](docker/README.md)
+
+
+launch the container from image :
+
+```bash
+docker run --rm -d -u $(id --user) -v `pwd`:/config iotmonitor
+```
+
+
+
+#### From scratch
+
+for building the project, the following elements are needed :
+
+- leveldb library (used for storing stated)
+- C compiler (builds essentials)
+- cmake
+- zig : 0.8.0
+
+then launch the following commands :
+
+```bash
+git clone --recursive https://github.com/frett27/iotmonitor
+cd iotmonitor
+cd paho.mqtt.c
+cmake -DPAHO_BUILD_STATIC=true .
+make
+cd ..
+
+mkdir bin
+zig build -Dcpu=baseline -Dtarget=native-native-gnu
+```
+
+
 
 
 ### Configuration File
@@ -82,43 +154,8 @@ The counter is resetted at each startup.
 
 
 
-### Building the project on linux
 
 
-### Using docker, 
-
-[see README in docker subfolder, for details and construct the image](docker/README.md)
-
-
-launch the container from image :
-
-```bash
-docker run --rm -d -u $(id --user) -v `pwd`:/config iotmonitor
-```
-
-#### From scratch
-
-for building the project, the following elements are needed :
-
-- leveldb library (used for storing stated)
-- C compiler (builds essentials)
-- cmake
-- zig : 0.8.0
-
-then launch the following commands :
-
-```bash
-git clone --recursive https://github.com/frett27/iotmonitor
-cd iotmonitor
-cd paho.mqtt.c
-cmake -DPAHO_BUILD_STATIC=true .
-make
-cd ..
-
-mkdir bin
-zig build -Dcpu=baseline -Dtarget=native-native-gnu
-```
-	
 ### Credits
 
 - zig-toml : for zig toml parser

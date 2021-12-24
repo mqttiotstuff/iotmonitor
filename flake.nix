@@ -2,9 +2,7 @@
   description = "Flake for building Iotmonitor";
   # inputs = [ zig git cmake leveldb pandoc ];
   inputs = { 
-      
       nixpkgs.url = "github:NixOS/nixpkgs/nixos-21.11";
-      
   };
 
   outputs = { self, nixpkgs }: {

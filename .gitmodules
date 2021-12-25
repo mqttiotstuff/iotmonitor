@@ -3,7 +3,7 @@
 	url = https://github.com/eclipse/paho.mqtt.c
 [submodule "routez"]
 	path = routez
-	url = https://github.com/Vexu/routez
+	url = https://github.com/frett27/routez
 [submodule "zig-tracy"]
 	path = zig-tracy
 	url = https://github.com/nektro/zig-tracy

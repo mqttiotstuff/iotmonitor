@@ -5,6 +5,8 @@ baseTopic="mybaseTopic/monitoring"
 user=""
 password=""
 
+[http]
+
 [device_nodered]
 watchTimeOut=2
 watchTopics="home/agents/nodered/watchdog"
@@ -12,5 +14,5 @@ watchTopics="home/agents/nodered/watchdog"
 [agent_switchcontrol]
 exec="sleep 100"
 watchTopics="home/agents"
-;watchTimeOut=
+# watchTimeOut=
 

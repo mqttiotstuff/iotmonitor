@@ -1,17 +1,25 @@
 const std = @import("std");
 const mem = std.mem;
+const debug = std.debug;
+const log = std.log;
 
-const cmqtt = @import("mqtt_paho.zig");
+//const cmqtt = @import("mqtt_paho.zig");
+const cmqtt = @cImport({
+    @cInclude("MQTTClient.h");
+});
 const c = @cImport({
     @cInclude("stdio.h");
     @cInclude("unistd.h");
     @cInclude("string.h");
     @cInclude("time.h");
+    //@cInclude("paho.mqtt.c/src/MQTTClient.h");
 });
 
 const CallBack = fn (topic: []u8, message: []u8) void;
 
 const MAX_REGISTERED_TOPICS = 10;
+
+const mqttlibError = error{FailToRegister};
 
 // Connexion to mqtt
 //
@@ -30,15 +38,18 @@ pub const MqttCnx = struct {
 
     // this message is received in an other thread
     fn _defaultCallback(topic: []u8, message: []u8) void {
-        _ = c.printf("%s", &message[0]);
+        _ = c.printf("%s -> %s", topic.ptr, message.ptr);
     }
 
-    fn _connLost(ctx: ?*c_void, m: [*c]u8) callconv(.C) void {
+    fn _connLost(ctx: ?*anyopaque, m: [*c]u8) callconv(.C) void {
+        _ = m;
         const self_ctx = @intToPtr(*Self, @ptrToInt(ctx));
-        _ = c.printf("connection lost");
+        _ = c.printf("connection lost %d", self_ctx);
     }
 
-    fn _msgArrived(ctx: ?*c_void, topic: [*c]u8, topic_length: c_int, message: [*c]cmqtt.MQTTClient_message) callconv(.C) c_int {
+    fn _msgArrived(ctx: ?*anyopaque, topic: [*c]u8, topic_length: c_int, message: [*c]cmqtt.MQTTClient_message) callconv(.C) c_int {
+        _ = topic_length;
+
         const messagePtrAddress = @ptrToInt(&message);
         var cmsg = @intToPtr([*c][*c]cmqtt.MQTTClient_message, messagePtrAddress);
         defer cmqtt.MQTTClient_freeMessage(cmsg);
@@ -51,24 +62,28 @@ pub const MqttCnx = struct {
         // _ = c.printf("topic length is %d \n", topic_length);
 
         const tlength: usize = c.strlen(topic);
+        // topic_length always 0 ... non sense
         const mlength = @intCast(u32, message.*.payloadlen);
 
         const am = @ptrToInt(message.*.payload);
         const mptr = @intToPtr([*]u8, am);
         // pass to zig in proper way with slices
         self_ctx.callBack(topic[0..tlength], mptr[0..mlength]);
+
         return 1; // properly handled
     }
 
-    fn _delivered(ctx: ?*c_void, token: cmqtt.MQTTClient_deliveryToken) callconv(.C) void {
+    fn _delivered(ctx: ?*anyopaque, token: cmqtt.MQTTClient_deliveryToken) callconv(.C) void {
+
         // _ = c.printf("%s", "received token");
         // unsafe conversion
         const self_ctx = @intToPtr(*Self, @ptrToInt(ctx));
-
         self_ctx.*.latestDeliveryToken.* = token;
     }
 
-    pub fn deinit(self: *Self) !void {}
+    pub fn deinit(self: *Self) !void {
+        _ = self;
+    }
 
     pub fn init(allocator: *mem.Allocator, serverAddress: []const u8, clientid: []const u8, username: []const u8, password: []const u8) !*Self {
         var handle: cmqtt.MQTTClient = undefined;
@@ -128,6 +143,7 @@ pub const MqttCnx = struct {
             },
             .maxInflightMessages = -1,
             .cleanstart = 0, // only available on V5 +
+            .httpHeaders = null,
         };
 
         if (username.len == 0) {
@@ -149,6 +165,9 @@ pub const MqttCnx = struct {
         self_ptr.reconnect_registered_topics_length = 0;
 
         const retCallBacks = cmqtt.MQTTClient_setCallbacks(handle, self_ptr, _connLost, _msgArrived, _delivered);
+        if (retCallBacks != cmqtt.MQTTCLIENT_SUCCESS) {
+            return mqttlibError.FailToRegister;
+        }
         try self_ptr.reconnect(true);
         return self_ptr;
     }
@@ -175,7 +194,7 @@ pub const MqttCnx = struct {
             for (self.reconnect_registered_topics[0..self.reconnect_registered_topics_length]) |e| {
                 if (e) |nonNullPtr| {
                     _ = c.printf("re-registering %s \n", nonNullPtr.ptr);
-                    self._register(nonNullPtr) catch |errregister| {
+                    self._register(nonNullPtr) catch {
                         _ = c.printf("cannot reregister \n");
                     };
                 }
@@ -191,9 +210,11 @@ pub const MqttCnx = struct {
     pub fn publishWithQos(self: *Self, topic: [*c]const u8, msg: []const u8, qos: u8) !void {
         self._publishWithQos(topic, msg, qos) catch |e| {
             _ = c.printf("fail to publish, try to reconnect \n");
+            log.warn("error : {}", .{e});
             self.connected = false;
-            self.reconnect(false) catch {
+            self.reconnect(false) catch |reconnecterr| {
                 _ = c.printf("failed to reconnect, will retry later \n");
+                log.warn("error: {}", .{reconnecterr});
             };
         };
     }
@@ -234,7 +255,7 @@ pub const MqttCnx = struct {
 
         const resultPublish = cmqtt.MQTTClient_publishMessage(self.handle, topic, &mqttmessage, token);
         if (resultPublish != 0) {
-            std.debug.warn("publish mqtt message returned {}\n", .{resultPublish});
+            std.log.warn("publish mqtt message returned {}\n", .{resultPublish});
             return error.MQTTPublishError;
         }
 
@@ -283,7 +304,7 @@ test "testconnect mqtt home" {
     var userName: []const u8 = "sys";
     var password: []const u8 = "pwd";
 
-    var handle: cmqtt.MQTTClient = null;
+    // var handle: cmqtt.MQTTClient = null;
 
     var cnx = try MqttCnx.init(allocator, serverAddress, clientid, userName, password);
 
@@ -314,20 +335,9 @@ pub fn main() !void {
     var userName: []const u8 = "sys";
     var password: []const u8 = "pwd";
 
-    var handle: cmqtt.MQTTClient = null;
-
     var cnx = try MqttCnx.init(allocator, serverAddress, clientid, userName, password);
-
-    const myStaticMessage: []const u8 = "Hello static message";
-
     _ = try cnx.register("home/#");
-
     _ = c.sleep(20);
-    //var i : u32=0;
-    //while (i < 10000): ( i+= 1) {
-    //    try cnx.publish("myothertopic", myStaticMessage);
-    //}
-
     _ = c.printf("ended");
 
     return;

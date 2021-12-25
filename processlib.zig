@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const debug = std.debug;
+const log = std.log;
 const os = std.os;
 const mem = std.mem;
 const fs = std.fs;
@@ -56,12 +57,12 @@ pub fn getProcessInformations(pid: i32, processInfo: *ProcessInformation) !bool 
     defer procDir.close();
 
     const r = try fmt.bufPrint(&buffer, "{}", .{pid});
-    var subprocDir: Dir = procDir.openDir(r, options) catch |e| {
+    var subprocDir: Dir = procDir.openDir(r, options) catch {
+        log.warn("no dir associated to proc {}", .{pid});
         return false;
     };
     defer subprocDir.close();
 
-    const flags = File.OpenFlags{ .read = false };
     var commandLineFile: File = try subprocDir.openFile("cmdline", File.OpenFlags{});
     defer commandLineFile.close();
 
@@ -108,24 +109,24 @@ pub fn listProcesses(callback: ProcessInformationCallback) !void {
 
         const pid = try fmt.parseInt(i32, f.name, 10);
         var pi = ProcessInformation{};
-        const successGetInformations = getProcessInformations(pid, &pi) catch |e| {
+        const successGetInformations = getProcessInformations(pid, &pi) catch {
             // if file retrieve failed because of pid close, continue
             continue;
         };
         if (successGetInformations and pi.commandlinebuffer_size > 0) {
             callback(&pi);
-            // debug.warn(" {}: {} \n", .{ pid, pi.commandlinebuffer[0..pi.commandlinebuffer_size] });
+            // log.warn(" {}: {} \n", .{ pid, pi.commandlinebuffer[0..pi.commandlinebuffer_size] });
         }
         // try opening the commandline file
     }
 }
 
 fn testCallback(processInformation: *ProcessInformation) void {
-    debug.warn("processinformation : {}", .{processInformation});
+    log.warn("processinformation : {}", .{processInformation});
     // dump the commnand line buffer
     var it = processInformation.iterator();
     while (it.next()) |i| {
-        debug.warn("     {}\n", .{i});
+        log.warn("     {}\n", .{i});
     }
 }
 

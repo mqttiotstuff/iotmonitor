@@ -1,4 +1,7 @@
-const mem = @import("std").mem;
+const std = @import("std");
+const mem = std.mem;
+
+const assert = std.debug.assert;
 
 // test if the evaluted topic belong to the reference Topic,
 // return the sub path if it is

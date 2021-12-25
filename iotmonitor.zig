@@ -7,6 +7,7 @@
 const std = @import("std");
 const json = std.json;
 const debug = std.debug;
+const log = std.log;
 const assert = debug.assert;
 const mem = std.mem;
 const os = std.os;
@@ -61,7 +62,7 @@ const MonitoringInfo = struct {
     stateTopics: ?[]const u8 = null,
     helloTopic: ?[]const u8 = null,
     helloTopicCount: u64 = 0,
-    allocator: *mem.Allocator,
+    allocator: mem.Allocator,
 
     // in case of process informations,
     // used to relaunch or not the process, permitting to
@@ -70,7 +71,7 @@ const MonitoringInfo = struct {
 
     associatedProcessInformation: ?*AdditionalProcessInformation = null,
 
-    fn init(allocator: *mem.Allocator) !*MonitoringInfo {
+    fn init(allocator: mem.Allocator) !*MonitoringInfo {
         const device = try allocator.create(MonitoringInfo);
         device.allocator = allocator;
         device.stateTopics = null;
@@ -140,17 +141,17 @@ pub fn secureZero(comptime T: type, s: []T) void {
 
 // parse the device info,
 // device must have a watch topics
-fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table) !*MonitoringInfo {
+fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !*MonitoringInfo {
     const device = try MonitoringInfo.init(allocator);
     errdefer device.deinit();
-    const allocName = try allocator.alloc(u8, name.*.len + 1);
+    const allocName = try allocator.alloc(u8, name.len + 1);
 
     secureZero(u8, allocName);
 
-    std.mem.copy(u8, allocName, name.*);
+    std.mem.copy(u8, allocName, name);
     device.name = allocName;
 
-    if (entry.getKey("exec")) |exec| {
+    if (entry.keys.get("exec")) |exec| {
         const execValue = exec.String;
         assert(execValue.len > 0);
         const execCommand = try allocator.allocSentinel(u8, execValue.len, 0);
@@ -162,7 +163,7 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
         device.associatedProcessInformation = additionalStructure;
     }
 
-    if (entry.getKey("watchTopics")) |watch| {
+    if (entry.keys.get("watchTopics")) |watch| {
         // there may have a wildcard at the end
         // strip it to compare to the received topic
         const watchValue = watch.String;
@@ -175,7 +176,7 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
         return error.DEVICE_MUST_HAVE_A_WATCH_TOPIC;
     }
 
-    if (entry.getKey("stateTopics")) |watch| {
+    if (entry.keys.get("stateTopics")) |watch| {
         // there may have a wildcard at the end
         // strip it to compare to the received topic
         const watchValue = watch.String;
@@ -186,7 +187,7 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
         }
     }
 
-    if (entry.getKey("helloTopic")) |hello| {
+    if (entry.keys.get("helloTopic")) |hello| {
         const helloValue = hello.String;
         assert(helloValue.len > 0);
         device.helloTopic = helloValue;
@@ -195,7 +196,7 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
         }
     }
 
-    if (entry.getKey("watchTimeOut")) |timeout| {
+    if (entry.keys.get("watchTimeOut")) |timeout| {
         const timeOutValue = timeout.Integer;
         device.timeoutValue = @intCast(u32, timeOutValue);
         if (Verbose) {
@@ -207,94 +208,112 @@ fn parseDevice(allocator: *mem.Allocator, name: *[]const u8, entry: *toml.Table)
     return device;
 }
 
-const Config = struct { clientId: []const u8, mqttBroker: []const u8, user: []const u8, password: []const u8, clientid: []const u8, mqttIotmonitorBaseTopic: []u8 };
+const Config = struct { clientId: []u8, mqttBroker: []u8, user: []u8, password: []u8, clientid: []u8, mqttIotmonitorBaseTopic: []u8 };
 const HttpServerConfig = struct { activateHttp: bool = true, listenAddress: []const u8, port: u16 = 8079 };
 
 var MqttConfig: *Config = undefined;
 var HttpConfig: *HttpServerConfig = undefined;
 
-fn parseTomlConfig(allocator: *mem.Allocator, _alldevices: *AllDevices, filename: []const u8) !void {
+fn parseTomlConfig(allocator: mem.Allocator, _alldevices: *AllDevices, filename: []const u8) !void {
     const t = tracy.trace(@src());
     defer t.end();
 
     // getting config parameters
 
-    var config = try toml.parseFile(allocator, filename);
+    var parser: toml.Parser = undefined;
+    defer parser.deinit();
+
+    var config = try toml.parseFile(allocator, filename, &parser); // no custom parser
     defer config.deinit();
 
-    var it = config.children.iterator();
+    var it = config.keys.iterator();
     while (it.next()) |e| {
-        if (e.key_ptr.*.len >= 7) {
-            const DEVICEPREFIX = "device_";
-            const AGENTPREFIX = "agent_";
-            const isDevice = mem.eql(u8, e.key_ptr.*[0..DEVICEPREFIX.len], DEVICEPREFIX);
-            const isAgent = mem.eql(u8, e.key_ptr.*[0..AGENTPREFIX.len], AGENTPREFIX);
-            if (isDevice or isAgent) {
-                if (Verbose) {
-                    try out.print("device found :{}\n", .{e.key_ptr.*});
+        // get table value
+        switch (e.value_ptr.*) {
+            toml.Value.Table => |table| {
+                if (table.name.len >= 7) {
+                    const DEVICEPREFIX = "device_";
+                    const AGENTPREFIX = "agent_";
+                    const isDevice = mem.eql(u8, table.name.ptr[0..DEVICEPREFIX.len], DEVICEPREFIX);
+                    const isAgent = mem.eql(u8, table.name.ptr[0..AGENTPREFIX.len], AGENTPREFIX);
+                    if (isDevice or isAgent) {
+                        if (Verbose) {
+                            try out.print("device found :{}\n", .{table.name.*});
+                        }
+                        var prefixlen = AGENTPREFIX.len;
+                        if (isDevice) prefixlen = DEVICEPREFIX.len;
+
+                        const dev = try parseDevice(allocator, table.name.ptr[prefixlen..table.name.len], table);
+                        if (Verbose) {
+                            try out.print("add {} to device list, with watch {} and state {} \n", .{ dev.name, dev.watchTopics, dev.stateTopics });
+                        }
+                        _ = try _alldevices.put(dev.name, dev);
+                    } else {
+                        try out.print("bad prefix for section :{s} , only device_ or agent_ accepted, skipped \n", .{e.key_ptr});
+                    }
                 }
-                var prefixlen = AGENTPREFIX.len;
-                if (isDevice) prefixlen = DEVICEPREFIX.len;
-                const dev = try parseDevice(allocator, &e.key_ptr.*[prefixlen..], e.value_ptr.*);
-                if (Verbose) {
-                    try out.print("add {} to device list, with watch {} and state {} \n", .{ dev.name, dev.watchTopics, dev.stateTopics });
-                }
-                _ = try _alldevices.put(dev.name, dev);
-            } else {
-                try out.print("bad prefix for section :{s} , only device_ or agent_ accepted, skipped \n", .{e.key_ptr});
-            }
+            },
+            toml.Value.None, toml.Value.String, toml.Value.Boolean, toml.Value.Integer, toml.Value.Array, toml.Value.ManyTables => continue,
         }
     }
 
     const conf = try allocator.create(Config);
 
-    if (config.getTable("mqtt")) |mqttconfig| {
-        if (mqttconfig.getKey("serverAddress")) |configAdd| {
-            conf.mqttBroker = configAdd.String;
+    if (config.keys.get("mqtt")) |mqttconfig| {
+        if (mqttconfig.Table.keys.get("serverAddress")) |configAdd| {
+            conf.mqttBroker = try allocator.alloc(u8, configAdd.String.len);
+            mem.copy(u8, conf.mqttBroker, configAdd.String);
         } else {
             return error.noKeyServerAddress;
         }
 
-        if (mqttconfig.getKey("user")) |u| {
-            conf.user = u.String;
+        if (mqttconfig.Table.keys.get("user")) |u| {
+            conf.user = try allocator.alloc(u8, u.String.len);
+            mem.copy(u8, conf.user, u.String);
         } else {
             return error.ConfigNoUser;
         }
 
-        if (mqttconfig.getKey("password")) |p| {
-            conf.password = p.String;
+        if (mqttconfig.Table.keys.get("password")) |p| {
+            conf.password = try allocator.alloc(u8, p.String.len);
+            mem.copy(u8, conf.password, p.String);
         } else {
             return error.ConfigNoPassword;
         }
 
-        if (mqttconfig.getKey("clientid")) |cid| {
-            conf.clientid = cid.String;
+        if (mqttconfig.Table.keys.get("clientid")) |cid| {
+            
+
+            conf.clientid = try allocator.alloc(u8, cid.String.len);
+            mem.copy(u8, conf.clientid, cid.String);
+
             try out.print("Using {s} as clientid \n", .{conf.clientid});
         } else {
-            conf.clientid = "iotmonitor";
+            conf.clientid = try allocator.alloc(u8, "iotmonitor".len);
+            mem.copy(u8, conf.clientid, "iotmonitor");
         }
 
-        const topicBase = if (mqttconfig.getKey("baseTopic")) |baseTopic| baseTopic.String else "home/monitoring";
+        const topicBase = if (mqttconfig.Table.keys.get("baseTopic")) |baseTopic| baseTopic.String else "home/monitoring";
 
         conf.mqttIotmonitorBaseTopic = try allocator.alloc(u8, topicBase.len + 1);
         conf.mqttIotmonitorBaseTopic[topicBase.len] = 0;
         mem.copy(u8, conf.mqttIotmonitorBaseTopic, topicBase[0..topicBase.len]);
     } else {
-        return error.ConfignoMqtt;
+        return error.ConfigNoMqttSection;
     }
 
     const httpconf = try allocator.create(HttpServerConfig);
 
-    if (config.getTable("http")) |httpconfig| {
+    if (config.keys.get("http")) |httpconfig| {
         httpconf.*.activateHttp = true;
 
-        if (httpconfig.getKey("bind")) |baddr| {
+        if (httpconfig.Table.keys.get("bind")) |baddr| {
             httpconf.listenAddress = baddr.String;
         } else {
             httpconf.listenAddress = "127.0.0.1";
         }
 
-        if (httpconfig.getKey("port")) |port| {
+        if (httpconfig.Table.keys.get("port")) |port| {
             httpconf.*.port = @intCast(u16, port.Integer);
         } else {
             httpconf.*.port = 8079;
@@ -339,7 +358,7 @@ fn callback(topic: []u8, message: []u8) !void {
         const storeTopic = deviceInfo.stateTopics;
         const helloTopic = deviceInfo.helloTopic;
         if (storeTopic) |store| {
-            if (try topics.doesTopicBelongTo(topic, store)) |sub| {
+            if (try topics.doesTopicBelongTo(topic, store)) |_| {
 
                 // always store topic, even if the monitoring is not enabled
 
@@ -350,7 +369,7 @@ fn callback(topic: []u8, message: []u8) !void {
                     try out.print("length {}\n", .{topic.len});
                 }
                 db.put(topic, message) catch |errStorage| {
-                    debug.warn("fail to store message {s} for topic {s}, on database with error {} \n", .{ message, topic, errStorage });
+                    log.warn("fail to store message {s} for topic {s}, on database with error {} \n", .{ message, topic, errStorage });
                 };
             }
         }
@@ -393,7 +412,7 @@ fn callback(topic: []u8, message: []u8) !void {
 
                                         // resend state
                                         cnx.publish(topicWithSentinel, stateTopicValue.*) catch |errorMqtt| {
-                                            std.debug.warn("ERROR {} fail to publish initial state on topic {}", .{ errorMqtt, topicWithSentinel });
+                                            log.warn("ERROR {} fail to publish initial state on topic {}", .{ errorMqtt, topicWithSentinel });
                                             try out.print(".. state restoring done, listening mqtt topics\n", .{});
                                         };
                                     }
@@ -405,7 +424,7 @@ fn callback(topic: []u8, message: []u8) !void {
                 }
             }
         } // hello
-        if (try topics.doesTopicBelongTo(topic, watchTopic)) |sub| {
+        if (try topics.doesTopicBelongTo(topic, watchTopic)) |_| {
             // trigger the timeout for the iot element
             try deviceInfo.updateNextContact();
         }
@@ -421,7 +440,7 @@ const AllDevices = std.StringHashMap(*MonitoringInfo);
 const DiskHash = leveldb.LevelDBHashArray(u8, u8);
 
 // global variables
-const globalAllocator = std.heap.c_allocator;
+var globalAllocator = std.heap.c_allocator;
 var alldevices: AllDevices = undefined;
 var db: *DiskHash = undefined;
 
@@ -438,7 +457,7 @@ test "read whole database" {
     const iterator = try db.iterator();
     defer globalAllocator.destroy(iterator);
     defer iterator.deinit();
-    debug.warn("Dump the iot database \n", .{});
+    log.warn("Dump the iot database \n", .{});
     iterator.first();
     while (iterator.isValid()) {
         const optReadKey = iterator.iterKey();
@@ -446,7 +465,7 @@ test "read whole database" {
             defer globalAllocator.destroy(k);
             const optReadValue = iterator.iterValue();
             if (optReadValue) |v| {
-                debug.warn("   key :{} value: {}\n", .{ k.*, v.* });
+                log.warn("   key :{} value: {}\n", .{ k.*, v.* });
                 defer globalAllocator.destroy(v);
             }
         }
@@ -492,10 +511,12 @@ fn launchProcess(monitoringInfo: *MonitoringInfo) !void {
         try m.put("IOTMONITORMAGIC", bufferMagic[0..c.strlen(bufferMagic)]);
 
         // execute the process
-        const err = std.process.execve(globalAllocator, &argv, &m);
+        std.process.execve(globalAllocator, &argv, &m) catch {
+            unreachable;
+        };
+
         // if  succeeded the process is replaced
-        // otherwise this is an error
-        unreachable;
+
     } else {
         try out.print("process launched, pid : {}\n", .{pid});
         monitoringInfo.*.associatedProcessInformation.?.pid = pid;
@@ -641,11 +662,11 @@ fn publishWatchDog() !void {
     secureZero(u8, bufferPayload);
     cpt = (cpt + 1) % 1_000_000;
     _ = c.sprintf(bufferPayload.ptr, "%d", cpt);
-    const topicloadLength = c.strlen(topicBufferPayload.ptr);
+
     const payloadLength = c.strlen(bufferPayload.ptr);
 
     cnx.publish(topicBufferPayload.ptr, bufferPayload[0..payloadLength]) catch {
-        std.debug.warn("cannot publish watchdog message, will retryi \n", .{});
+        log.warn("cannot publish watchdog message, will retryi \n", .{});
     };
 }
 
@@ -663,10 +684,9 @@ fn publishProcessStarted(mi: *MonitoringInfo) !void {
     secureZero(u8, bufferPayload);
     _ = c.sprintf(bufferPayload.ptr, "%d", mi.*.associatedProcessInformation.?.lastRestarted);
 
-    const topicloadLength = c.strlen(topicBufferPayload.ptr);
     const payloadLength = c.strlen(bufferPayload.ptr);
     cnx.publish(topicBufferPayload.ptr, bufferPayload[0..payloadLength]) catch {
-        std.debug.warn("cannot publish watchdog message, will retryi \n", .{});
+        log.warn("cannot publish watchdog message, will retryi \n", .{});
     };
 }
 
@@ -684,7 +704,7 @@ fn publishDeviceMonitoringInfos(device: *MonitoringInfo) !void {
     const payloadLen = c.strlen(bufferPayload.ptr);
 
     cnx.publish(topicBufferPayload.ptr, bufferPayload[0..payloadLen]) catch {
-        std.debug.warn("cannot publish timeout message for device {} , will retry \n", .{device.name});
+        log.warn("cannot publish timeout message for device {} , will retry \n", .{device.name});
     };
 }
 
@@ -704,7 +724,7 @@ fn publishDeviceTimeOut(device: *MonitoringInfo) !void {
     const payloadLen = c.strlen(bufferPayload.ptr);
 
     cnx.publish(topicBufferPayload.ptr, bufferPayload[0..payloadLen]) catch {
-        std.debug.warn("cannot publish timeout message for device {} , will retry \n", .{device.name});
+        log.warn("cannot publish timeout message for device {} , will retry \n", .{device.name});
     };
 }
 
@@ -715,6 +735,7 @@ const JSONStatus = struct {
 };
 
 fn indexHandler(req: Request, res: Response) !void {
+    _ = req;
     const t = tracy.trace(@src());
     defer t.end();
 
@@ -738,7 +759,10 @@ fn indexHandler(req: Request, res: Response) !void {
 }
 
 const Address = std.net.Address;
-usingnamespace @import("routez");
+const routez = @import("routez");
+const Request = routez.Request;
+const Response = routez.Response;
+const Server = routez.Server;
 
 const Thread = std.Thread;
 
@@ -747,7 +771,8 @@ var addr: Address = undefined;
 
 // http server context
 const ServerCtx = struct {};
-fn startServer(context: ServerCtx) void {
+pub fn startServer(context: ServerCtx) void {
+    _ = context;
     server.listen(addr) catch {
         @panic("cannot start listening http server");
     };
@@ -767,7 +792,7 @@ pub fn main() !void {
     };
     defer args.deinit();
 
-    try out.writeAll("IotMonitor start, version");
+    try out.writeAll("IotMonitor start, version ");
     try out.writeAll(version.version);
     try out.writeAll("\n");
     try out.writeAll("-------------------------------\n");
@@ -789,7 +814,7 @@ pub fn main() !void {
     try out.writeAll("Reading the config file\n");
 
     // Friendly error if the file does not exists
-    var openedtestfile = std.os.open(configurationFile, std.os.O_RDONLY, 0) catch |e| {
+    var openedtestfile = std.os.open(configurationFile, 0, 0) catch {
         try out.writeAll("Cannot open file config.toml\n");
         // try debug.print(e);
         return;
@@ -801,7 +826,7 @@ pub fn main() !void {
 
     try out.writeAll("Opening database\n");
 
-    db = try DiskHash.init(globalAllocator);
+    db = try DiskHash.init(&globalAllocator);
     const filename = "iotdb.leveldb";
     _ = try db.open(filename);
     defer db.close();
@@ -817,18 +842,20 @@ pub fn main() !void {
 
     try out.print("    connecting to \"{s}\" with user \"{s}\" and clientid \"{s}\"\n", .{ serverAddress, userName, clientid });
 
-    cnx = try mqtt.MqttCnx.init(globalAllocator, serverAddress, clientid, userName, password);
+    cnx = try mqtt.MqttCnx.init(&globalAllocator, serverAddress, clientid, userName, password);
 
     if (HttpConfig.activateHttp) {
         try out.print("Start embedded http server on port {} \n", .{HttpConfig.*.port});
         server = Server.init(
             globalAllocator,
             .{},
-            .{all("/", indexHandler)},
+            .{routez.all("/", indexHandler)},
         );
         addr = try Address.parseIp(HttpConfig.*.listenAddress, HttpConfig.*.port);
 
-        const threadHandle = try Thread.spawn(startServer, .{});
+        const threadConfig: Thread.SpawnConfig = .{};
+        const threadHandle = try Thread.spawn(threadConfig, startServer, .{.{}});
+        _ = threadHandle;
         try out.print("Http server thread launched\n", .{});
     }
 
@@ -857,7 +884,7 @@ pub fn main() !void {
 
                 // if failed, stop the process
                 cnx.publish(topicWithSentinel, value.*) catch |e| {
-                    std.debug.warn("ERROR {} fail to publish initial state on topic {s}", .{ e, topicWithSentinel });
+                    log.warn("ERROR {} fail to publish initial state on topic {s}", .{ e, topicWithSentinel });
                     try out.print(".. State restoring done, listening mqtt topics\n", .{});
                 };
             }
@@ -900,6 +927,6 @@ pub fn main() !void {
         }
     }
 
-    debug.warn("ended", .{});
+    log.warn("ended", .{});
     return;
 }

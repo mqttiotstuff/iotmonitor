@@ -4,6 +4,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const trait = std.meta.trait;
 const debug = std.debug;
+const log = std.log;
 const assert = debug.assert;
 const Allocator = mem.Allocator;
 const mem = std.mem;
@@ -21,6 +22,7 @@ const c = @cImport({
 
 // this define the generic API for either Simple Type and composite Type for serialization
 fn SerDeserAPI(comptime T: type, comptime INType: type, comptime OUTType: type) type {
+    _ = T;
     return struct {
         const MarshallFn = fn (*const INType, *Allocator) []const u8;
         const UnMarshallFn = fn ([]const u8, *Allocator) *align(1) OUTType;
@@ -33,6 +35,7 @@ pub fn ArrSerDeserType(comptime T: type) SerDeserAPI(T, []const T, []T) {
     const MI = struct {
         // default functions when the type is still serializable
         fn noMarshallFn(t: *const []const T, allocator: *Allocator) []const u8 {
+            _ = allocator;
             return t.*;
         }
 
@@ -56,7 +59,7 @@ pub fn ArrSerDeserType(comptime T: type) SerDeserAPI(T, []const T, []T) {
 // need sed deser for storing on disk
 pub fn SerDeserType(comptime T: type) SerDeserAPI(T, T, T) {
     comptime {
-        if (comptime @typeInfo(T) == .Pointer) {
+        if (@typeInfo(T) == .Pointer) {
             @panic("this ser deser type is only for simple types");
         }
     }
@@ -64,12 +67,14 @@ pub fn SerDeserType(comptime T: type) SerDeserAPI(T, T, T) {
     const MI = struct {
         // default functions when the type is still serializable
         fn noMarshallFn(t: *const T, allocator: *Allocator) []const u8 {
+            _ = allocator;
             return mem.asBytes(t);
         }
 
         // unmarshall must make a copy,
         // because leveldb has its own buffers
         fn noUnMarshallFn(e: []const u8, allocator: *Allocator) *align(1) T {
+            _ = allocator;
             const eptr = @ptrToInt(&e[0]);
             return @intToPtr(*align(1) T, eptr);
         }
@@ -170,7 +175,7 @@ pub fn LevelDBHashWithSerialization(
             const result = cleveldb.leveldb_open(options, filename, &err);
 
             if (err != null) {
-                _ = debug.warn("{s}", .{"open failed"});
+                _ = log.warn("{s}", .{"open failed"});
                 defer cleveldb.leveldb_free(err);
                 return error.OPEN_FAILED;
             }
@@ -179,7 +184,7 @@ pub fn LevelDBHashWithSerialization(
         }
 
         pub fn close(self: *Self) void {
-            debug.warn("close database \n", .{});
+            log.warn("close database \n", .{});
             cleveldb.leveldb_close(self.leveldbHandle);
             self.leveldbHandle = undefined;
         }
@@ -196,7 +201,7 @@ pub fn LevelDBHashWithSerialization(
             // defer self.allocator.free(marshalledValue);
             cleveldb.leveldb_put(self.leveldbHandle, self.writeOptions, marshalledKey.ptr, marshalledKey.len, marshalledValue.ptr, marshalledValue.len, &err);
             if (err != null) {
-                debug.warn("{s}", .{"open failed"});
+                log.warn("{s}", .{"open failed"});
                 defer cleveldb.leveldb_free(err);
                 return error.KEY_WRITE_FAILED;
             }
@@ -220,7 +225,7 @@ pub fn LevelDBHashWithSerialization(
                 debug.warn("key not found \n", .{});
                 return null;
             }
-            const torelease = @ptrCast(*c_void, read);
+            const torelease = @ptrCast(*anyopaque, read);
             defer cleveldb.leveldb_free(torelease);
             // _ = c.printf("returned : %s %d\n", read, read_len);
             const structAddr = @ptrToInt(read);
@@ -339,7 +344,6 @@ test "test iterators" {
 }
 
 test "test no specialization" {
-    var filename = "othertestnoser\x00";
 
     var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
     defer arena.deinit();
@@ -347,6 +351,7 @@ test "test no specialization" {
 
     const SS = LevelDBHash(u32, u8);
     var l = try SS.init(allocator);
+    assert(l != null);
 }
 
 test "test storing ints" {
@@ -483,9 +488,9 @@ test "test serialization types" {
     defer arena.deinit();
     const allocator = &arena.allocator;
 
-    comptime const u32SerializationType = SerDeserType(u32);
-    comptime const u8ArrSerializationType = ArrSerDeserType(u8);
-    comptime const SS = LevelDBHashWithSerialization(u32, u32, u32, u8, []const u8, []u8, u32SerializationType, u8ArrSerializationType);
+    const u32SerializationType = SerDeserType(u32);
+    const u8ArrSerializationType = ArrSerDeserType(u8);
+    const SS = LevelDBHashWithSerialization(u32, u32, u32, u8, []const u8, []u8, u32SerializationType, u8ArrSerializationType);
 
     var l = try SS.init(allocator);
 

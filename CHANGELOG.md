@@ -1,4 +1,12 @@
 
+
+## Version 0.2.5
+
+- add nix support for distribution and compilation
+- add http access to iot monitoring, see configuration options
+- move to zig 0.9.0
+
+
 ## Version 0.2.2
 
 #### 2021-06-12

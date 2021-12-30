@@ -23,7 +23,7 @@ parts:
     source-type: git
     source: https://github.com/frett27/iotmonitor.git
     source-branch: master
-    build-snaps: [zig/latest/edge]
+    build-snaps: [zig/latest/beta]
     build-packages: [build-essential, make, cmake, libleveldb-dev]
     stage-packages: [libleveldb-dev]
 

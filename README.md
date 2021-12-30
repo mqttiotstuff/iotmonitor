@@ -51,6 +51,16 @@ or :  (with the shell.nix in the folder)
 nix-shell
 ```
 
+#### Using Nix Flake
+
+
+	nix shell git+https://github.com/mqttiotstuff/iotmonitor?submodules=1
+
+
+build with flake :
+
+     git clone --recursive https://github.com/mqttiotstuff/iotmonitor
+     nix build nix build "git+file://$(pwd)?submodules=1"
 
 
 #### Using docker, 
@@ -73,7 +83,7 @@ for building the project, the following elements are needed :
 - leveldb library (used for storing stated)
 - C compiler (builds essentials)
 - cmake
-- zig : 0.8.0
+- zig : 0.9.0
 
 then launch the following commands :
 

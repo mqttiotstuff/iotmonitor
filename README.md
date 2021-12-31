@@ -60,7 +60,7 @@ nix-shell
 build with flake :
 
      git clone --recursive https://github.com/mqttiotstuff/iotmonitor
-     nix build nix build "git+file://$(pwd)?submodules=1"
+     nix build "git+file://$(pwd)?submodules=1"
 
 
 #### Using docker, 

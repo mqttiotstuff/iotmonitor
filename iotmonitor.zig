@@ -817,9 +817,10 @@ pub fn main() !void {
     try out.writeAll(version.version);
     try out.writeAll("\n");
 
-    var configurationFile = try globalAllocator.alloc(u8, 512);
     // default
-    mem.copy(u8, configurationFile, "config.toml");
+    const defaultConfigFile = "config.toml";
+    var configurationFile = try globalAllocator.alloc(u8, defaultConfigFile.len);
+    mem.copy(u8, configurationFile, defaultConfigFile);
     var arg_index: u32 = 0;
     for (args.positionals()) |pos| {
         debug.print("{s}\n", .{pos});

@@ -10,13 +10,14 @@ const File = fs.File;
 const Dir = fs.Dir;
 const fmt = std.fmt;
 
-const BUFFERSIZE = 8292 * 2;
 pub const ProcessInformation = struct {
     pid: i32 = 0,
     // 8k for buffer ? is it enought ?
     commandlinebuffer: [BUFFERSIZE]u8 = [_]u8{'\x00'} ** BUFFERSIZE,
     commandlinebuffer_size: u16 = 0,
     const Self = @This();
+
+    const BUFFERSIZE = 8292 * 2;
 
     // iterator on the command line arguments
     const Iterator = struct {

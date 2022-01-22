@@ -1,7 +1,7 @@
 //
 //  IOT Monitor - monitor and recover state for iot device and software agents
 //
-//  pfreydiere - 2019 - 2020
+//  pfreydiere - 2019 - 2022
 //
 
 const std = @import("std");
@@ -31,7 +31,8 @@ const topics = @import("topics.zig");
 const toml = @import("toml");
 const clap = @import("clap");
 
-// profiling
+// profiling, to check performance on functions
+// this is mocked in the build.zig (activate this tracy library)
 const tracy = @import("tracy");
 
 const stdoutFile = std.io.getStdOut();
@@ -44,14 +45,18 @@ const Verbose = false;
 // relaunch it if needed
 //
 const AdditionalProcessInformation = struct {
-// pid is to track the process while running
-pid: ?i32 = undefined,
-// process identifier attributed by IOTMonitor, to track existing processes
-// processIdentifier: []const u8 = "",
-exec: []const u8 = "",
+    // pid is to track the process while running
+    pid: ?i32 = undefined,
+    // process identifier attributed by IOTMonitor, to track existing processes
+    // processIdentifier: []const u8 = "",
+    exec: []const u8 = "",
 
-// last time the process is restarted
-lastRestarted: c.time_t = null };
+    // last time the process is restarted
+    lastRestarted: c.time_t = null,
+
+    // number of time, the process is restarted
+    restartedCount: u64 = 0,
+};
 
 const MonitoringInfo = struct {
     // name of the device
@@ -160,6 +165,7 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
         additionalStructure.exec = execCommand;
         additionalStructure.pid = null;
         additionalStructure.lastRestarted = 0;
+        additionalStructure.restartedCount = 0;
         device.associatedProcessInformation = additionalStructure;
     }
 
@@ -282,8 +288,6 @@ fn parseTomlConfig(allocator: mem.Allocator, _alldevices: *AllDevices, filename:
         }
 
         if (mqttconfig.Table.keys.get("clientid")) |cid| {
-            
-
             conf.clientid = try allocator.alloc(u8, cid.String.len);
             mem.copy(u8, conf.clientid, cid.String);
 
@@ -520,6 +524,7 @@ fn launchProcess(monitoringInfo: *MonitoringInfo) !void {
     } else {
         try out.print("process launched, pid : {}\n", .{pid});
         monitoringInfo.*.associatedProcessInformation.?.pid = pid;
+        monitoringInfo.*.associatedProcessInformation.?.restartedCount += 1;
         _ = c.time(&monitoringInfo.*.associatedProcessInformation.?.lastRestarted);
 
         // launch mqtt restart information process in monitoring
@@ -568,7 +573,7 @@ fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {
         const device = deviceInfo.value_ptr.*;
         // not on optional
         if (device.associatedProcessInformation) |infos| {
-            // check if process has the magic Key
+            // check if process has the magic Key in the process list
             var itCmdLine = processInformation.iterator();
             while (itCmdLine.next()) |a| {
                 if (Verbose) {
@@ -621,7 +626,7 @@ fn runAllMissings() !void {
                     };
                 }
             } else {
-                // monitoring not enabled
+                // monitoring not enabled on the process
 
             }
         }
@@ -690,6 +695,8 @@ fn publishProcessStarted(mi: *MonitoringInfo) !void {
     };
 }
 
+// this publish on the mqtt broker the process informations
+//
 fn publishDeviceMonitoringInfos(device: *MonitoringInfo) !void {
     var topicBufferPayload = try globalAllocator.alloc(u8, 512);
     defer globalAllocator.free(topicBufferPayload);
@@ -782,6 +789,7 @@ pub fn startServer(context: ServerCtx) void {
 pub fn main() !void {
     const params = comptime [_]clap.Param(clap.Help){
         clap.parseParam("-h, --help             Display this help") catch unreachable,
+        clap.parseParam("-v, --version          Display version") catch unreachable,
         clap.parseParam("<TOML CONFIG FILE>...") catch unreachable,
     };
     var diag = clap.Diagnostic{};
@@ -792,31 +800,47 @@ pub fn main() !void {
     };
     defer args.deinit();
 
-    try out.writeAll("IotMonitor start, version ");
-    try out.writeAll(version.version);
-    try out.writeAll("\n");
-    try out.writeAll("-------------------------------\n");
-
     if (args.flag("--help")) {
-        debug.print("\n", .{});
         debug.print("\n", .{});
         debug.print("start the iotmonitor deamon, usage :\n", .{});
         debug.print("    iotmonitor [optional config.toml filepath]\n", .{});
-        debug.print("\n\n\n", .{});
+        debug.print("\n", .{});
         return;
     }
 
-    for (args.positionals()) |pos| {
-        debug.print("{s}\n", .{pos});
+    if (args.flag("--version")) {
+        debug.print("{s}", .{version.version});
+        return;
     }
 
-    const configurationFile = "config.toml";
-    try out.writeAll("Reading the config file\n");
+    try out.writeAll("IotMonitor start, version ");
+    try out.writeAll(version.version);
+    try out.writeAll("\n");
+
+    var configurationFile = try globalAllocator.alloc(u8, 512);
+    // default
+    mem.copy(u8, configurationFile, "config.toml");
+    var arg_index: u32 = 0;
+    for (args.positionals()) |pos| {
+        debug.print("{s}\n", .{pos});
+        debug.print("{}\n", .{pos.len});
+        if (arg_index == 0) {
+            globalAllocator.free(configurationFile);
+            configurationFile = try globalAllocator.alloc(u8, pos.len);
+            mem.copy(u8, configurationFile, pos);
+        }
+        arg_index += 1;
+    }
+
+    try out.writeAll("Reading ");
+    try out.writeAll(configurationFile);
+    try out.writeAll(" file\n");
 
     // Friendly error if the file does not exists
     var openedtestfile = std.os.open(configurationFile, 0, 0) catch {
-        try out.writeAll("Cannot open file config.toml\n");
-        // try debug.print(e);
+        try out.writeAll("Cannot open file ");
+        try out.writeAll(configurationFile);
+        try out.writeAll("\n");
         return;
     };
     std.os.close(openedtestfile);

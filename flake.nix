@@ -7,18 +7,22 @@
       # To have zig 0.9, unstable one, .. 
 nixpkgs.url = "https://github.com/NixOS/nixpkgs/archive/d9c13cf44ec1b6de95cb1ba83c296611d19a71ae.tar.gz";
 
+ flake-utils.url = "github:numtide/flake-utils";
+
 
   };
 
-  outputs = { self, nixpkgs }: {
+  outputs = { self, nixpkgs, flake-utils }: 
 
-    defaultPackage.x86_64-linux =
-      # Notice the reference to nixpkgs here.
-      with import nixpkgs { system = "x86_64-linux"; };
-      stdenv.mkDerivation {
+    flake-utils.lib.eachDefaultSystem (system:
+      let pkgs = nixpkgs.legacyPackages.${system};
+      in {
+	packages.iotmonitor = 
+        # Notice the reference to nixpkgs here.
+        pkgs.stdenv.mkDerivation {
         name = "iotmonitor";
         src = self;
-        buildInputs = [ zig git cmake leveldb pandoc ];
+        buildInputs = [ pkgs.zig pkgs.git pkgs.cmake pkgs.leveldb pkgs.pandoc ];
         configurePhase = ''
           ls
           zig version
@@ -36,5 +40,8 @@ nixpkgs.url = "https://github.com/NixOS/nixpkgs/archive/d9c13cf44ec1b6de95cb1ba8
 
       };
 
-  };
+      defaultPackage = self.packages.${system}.iotmonitor;
+      }
+    );
+ 
 }

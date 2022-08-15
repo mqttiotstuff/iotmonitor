@@ -16,7 +16,6 @@ pub fn build(b: *Builder) void {
 
     exe.addPackagePath("toml", "zig-toml/src/toml.zig");
     exe.addPackagePath("clap", "zig-clap/clap.zig");
-
     exe.addPackage(.{
         .name = "routez",
         .path = FileSource.relative("routez/src/routez.zig"),
@@ -30,7 +29,6 @@ pub fn build(b: *Builder) void {
 
     if (Activate_Tracy) {
         exe.addPackage(.{ .name = "tracy", .path = FileSource.relative("zig-tracy/src/lib.zig") });
-
         exe.addIncludeDir("tracy/");
         exe.addLibPath("tracy/library/unix");
         exe.linkSystemLibrary("tracy-debug");

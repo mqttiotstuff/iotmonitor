@@ -1,6 +1,6 @@
 name: iotmonitor
 base: core18
-version: '0.2.5+git'
+version: '0.2.6+git'
 summary: Monitor MQTT IOT devices or agents to make them run 
 description: |
   IotMonitor solve the "always up" problem of large IOT devices and agents system. 
@@ -22,7 +22,7 @@ parts:
     plugin: make
     source-type: git
     source: https://github.com/frett27/iotmonitor.git
-    source-branch: master
+    source-branch: zig_0.9.1
     build-snaps: [zig/latest/beta]
     build-packages: [build-essential, make, cmake, libleveldb-dev]
     stage-packages: [libleveldb-dev]

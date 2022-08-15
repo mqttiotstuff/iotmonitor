@@ -792,8 +792,12 @@ pub fn main() !void {
         clap.parseParam("-v, --version          Display version") catch unreachable,
         clap.parseParam("<TOML CONFIG FILE>...") catch unreachable,
     };
+
+
     var diag = clap.Diagnostic{};
-    var args = clap.parse(clap.Help, &params, .{ .diagnostic = &diag }) catch |err| {
+
+    var args = clap.parse(clap.Help, &params, 
+        .{ .diagnostic = &diag }) catch |err| {
         // Report useful error and exit
         diag.report(io.getStdErr().writer(), err) catch {};
         return err;

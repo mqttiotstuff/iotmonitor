@@ -44,14 +44,15 @@ const Verbose = false;
 // relaunch it if needed
 //
 const AdditionalProcessInformation = struct {
-// pid is to track the process while running
-pid: ?i32 = undefined,
-// process identifier attributed by IOTMonitor, to track existing processes
-// processIdentifier: []const u8 = "",
-exec: []const u8 = "",
+    // pid is to track the process while running
+    pid: ?i32 = undefined,
+    // process identifier attributed by IOTMonitor, to track existing processes
+    // processIdentifier: []const u8 = "",
+    exec: []const u8 = "",
 
-// last time the process is restarted
-lastRestarted: c.time_t = null };
+    // last time the process is restarted
+    lastRestarted: c.time_t = null,
+};
 
 const MonitoringInfo = struct {
     // name of the device
@@ -282,8 +283,6 @@ fn parseTomlConfig(allocator: mem.Allocator, _alldevices: *AllDevices, filename:
         }
 
         if (mqttconfig.Table.keys.get("clientid")) |cid| {
-            
-
             conf.clientid = try allocator.alloc(u8, cid.String.len);
             mem.copy(u8, conf.clientid, cid.String);
 
@@ -784,8 +783,12 @@ pub fn main() !void {
         clap.parseParam("-h, --help             Display this help") catch unreachable,
         clap.parseParam("<TOML CONFIG FILE>...") catch unreachable,
     };
+
+
     var diag = clap.Diagnostic{};
-    var args = clap.parse(clap.Help, &params, .{ .diagnostic = &diag }) catch |err| {
+
+    var args = clap.parse(clap.Help, &params, 
+        .{ .diagnostic = &diag }) catch |err| {
         // Report useful error and exit
         diag.report(io.getStdErr().writer(), err) catch {};
         return err;

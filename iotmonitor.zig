@@ -52,7 +52,7 @@ const AdditionalProcessInformation = struct {
     exec: []const u8 = "",
 
     // last time the process is restarted
-    lastRestarted: c.time_t = null,
+    lastRestarted: c.time_t = 0,
 
     // number of time, the process is restarted
     restartedCount: u64 = 0,
@@ -148,7 +148,7 @@ pub fn secureZero(s: []u8) void {
 fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !*MonitoringInfo {
     const device = try MonitoringInfo.init(allocator);
     errdefer device.deinit();
-    const allocName = try allocator.alloc(u8, name.len); // +1
+    const allocName = try allocator.alloc(u8, name.len + 1);
  
     secureZero(allocName);
 
@@ -356,7 +356,9 @@ fn callback(topic: []u8, message: []u8) !void {
     while (iterator.next()) |e| {
         const deviceInfo = e.value_ptr.*;
         if (Verbose) {
-            try out.print("evaluate state topic {s} with incoming topic {s} \n", .{ deviceInfo.stateTopics, topic });
+            if (deviceInfo.stateTopics) |stopic| {
+                try out.print("evaluate state topic {s} with incoming topic {s} \n", .{ stopic, topic });
+            }
         }
         const watchTopic = deviceInfo.watchTopics;
         const storeTopic = deviceInfo.stateTopics;
@@ -449,11 +451,8 @@ var alldevices: AllDevices = undefined;
 var db: *DiskHash = undefined;
 
 test "read whole database" {
-    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-    defer arena.deinit();
-    globalAllocator = &arena.allocator;
-
-    db = try DiskHash.init(globalAllocator);
+    
+    db = try DiskHash.init(&globalAllocator);
     const filename = "iotdb.leveldb";
     _ = try db.open(filename);
     defer db.close();

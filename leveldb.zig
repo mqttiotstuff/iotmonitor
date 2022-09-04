@@ -27,7 +27,7 @@ fn SerDeserAPI(comptime T: type, comptime INType: type, comptime OUTType: type) 
         const MarshallFn = fn (*const INType, *Allocator) []const u8;
         const UnMarshallFn = fn ([]const u8, *Allocator) *align(1) OUTType;
         marshall: MarshallFn,
-        unMarshall: UnMarshallFn
+        unMarshall: UnMarshallFn,
     };
 }
 
@@ -88,12 +88,10 @@ pub fn SerDeserType(comptime T: type) SerDeserAPI(T, T, T) {
 }
 
 test "use of noMarshallFn" {
-    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-    defer arena.deinit();
-    const allocator = &arena.allocator;
+    var allocator = std.heap.c_allocator;
     const i: u32 = 12;
-    var r = SerDeserType(u32).marshall(&i, allocator);
-    const ur = SerDeserType(u32).unMarshall(r, allocator);
+    var r = SerDeserType(u32).marshall(&i, &allocator);
+    const ur = SerDeserType(u32).unMarshall(r, &allocator);
     debug.assert(i == ur.*);
 }
 
@@ -144,7 +142,7 @@ pub fn LevelDBHashWithSerialization(
         }
 
         pub fn deinit(self: *Self) void {
-            debug.warn("deinit \n", .{});
+            debug.print("deinit \n", .{});
             // close already free the leveldb handle
             // cleveldb.leveldb_free(self.leveldbHandle);
             cleveldb.leveldb_free(self.writeOptions);
@@ -191,8 +189,8 @@ pub fn LevelDBHashWithSerialization(
 
         pub fn put(self: *Self, key: KIN, value: VIN) !void {
             var err: [*c]u8 = null;
-            // debug.warn("k size {}\n", .{@sizeOf(K)});
-            // debug.warn("array size {}\n", .{value.len});
+            // debug.print("k size {}\n", .{@sizeOf(K)});
+            // debug.print("array size {}\n", .{value.len});
 
             // marshall value
             const marshalledKey = KSerDeser.marshall(&key, self.allocator);
@@ -222,7 +220,7 @@ pub fn LevelDBHashWithSerialization(
                 return null;
             }
             if (read == null) {
-                debug.warn("key not found \n", .{});
+                debug.print("key not found \n", .{});
                 return null;
             }
             const torelease = @ptrCast(*anyopaque, read);
@@ -314,55 +312,51 @@ test "test iterators" {
     // already created database
     var filename = "countingstorage\x00";
 
-    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-    defer arena.deinit();
-    const allocator = &arena.allocator;
+    var allocator = std.heap.c_allocator;
 
     const SS = LevelDBHash(u32, u32);
-    var l = try SS.init(allocator);
+    var l = try SS.init(&allocator);
     defer l.deinit();
-    debug.warn("opening databse", .{});
+    debug.print("opening databse", .{});
     try l.open(filename);
     defer l.close();
 
-    debug.warn("create iterator", .{});
+    debug.print("create iterator", .{});
     const iterator = try l.iterator();
     defer iterator.deinit();
 
-    debug.warn("call first", .{});
+    debug.print("call first", .{});
     iterator.first();
     var r: ?*align(1) u32 = null;
     while (iterator.isValid()) {
-        debug.warn("iterKey", .{});
+        debug.print("iterKey", .{});
         r = iterator.iterKey();
         var v = iterator.iterValue();
-        debug.warn("key :{} value: {}\n", .{ r.?.*, v.?.* });
+        debug.print("key :{} value: {}\n", .{ r.?.*, v.?.* });
         allocator.destroy(v.?);
         iterator.next();
     }
-    debug.warn("now, close the iterator\n", .{});
+    debug.print("now, close the iterator\n", .{});
 }
 
 test "test no specialization" {
-
-    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-    defer arena.deinit();
-    const allocator = &arena.allocator;
+    
+    var allocator = std.heap.c_allocator;
 
     const SS = LevelDBHash(u32, u8);
-    var l = try SS.init(allocator);
-    assert(l != null);
+    _ = try SS.init(&allocator);
+    
+    //var l = try SS.init(&allocator);
+    // assert(l != null);
 }
 
 test "test storing ints" {
     var filename = "countingstorage\x00";
-
-    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-    defer arena.deinit();
-    const allocator = &arena.allocator;
+ 
+    var allocator = std.heap.c_allocator;
 
     const SS = LevelDBHash(u32, u32);
-    var l = try SS.init(allocator);
+    var l = try SS.init(&allocator);
     defer l.deinit();
 
     _ = try l.open(filename);
@@ -378,15 +372,15 @@ test "test storing ints" {
 test "test storing letters" {
     var filename = "stringstoragetest\x00";
 
-    const allocator = std.heap.c_allocator;
+    var allocator = std.heap.c_allocator;
 
     const SS = LevelDBHashArray(u8, u8);
-    var l = try SS.init(allocator);
+    var l = try SS.init(&allocator);
     defer l.deinit();
 
     _ = try l.open(filename);
 
-    const MAX_ITERATIONS = 100_000_000;
+    const MAX_ITERATIONS = 1_000_000;
 
     var i: u64 = 0;
     while (i < MAX_ITERATIONS) {
@@ -394,7 +388,7 @@ test "test storing letters" {
         var valueBuffer = [_]u8{ 65, 65, 65, 65, 65, 65 };
         _ = c.sprintf(&keyBuffer[0], "%d", i % 1000);
         _ = c.sprintf(&valueBuffer[0], "%d", (i + 1) % 1000);
-        // debug.warn(" {} -> {} , key length {}\n", .{ keyBuffer, valueBuffer, keyBuffer.len });
+        // debug.print(" {} -> {} , key length {}\n", .{ keyBuffer, valueBuffer, keyBuffer.len });
         try l.put(keyBuffer[0..], valueBuffer[0..]);
         const opt = try l.get(keyBuffer[0..]);
         allocator.destroy(opt.?);
@@ -406,10 +400,10 @@ test "test storing letters" {
     }
     var s = "1\x00AAAA";
     const t = mem.span(s);
-    debug.warn("test key length : {}\n", .{t[0..].len});
+    debug.print("test key length : {}\n", .{t[0..].len});
     const lecturealea = try l.get(t[0..]);
     debug.assert(lecturealea != null);
-    debug.warn("retrieved : {}\n", .{lecturealea});
+    debug.print("retrieved : {}\n", .{lecturealea});
     if (lecturealea) |value| {
         allocator.destroy(value);
     }
@@ -422,16 +416,16 @@ test "test storing letters" {
         const optV = it.iterValue();
         if (optK) |k| {
             defer allocator.destroy(k);
-            debug.warn("  {}  value : {}\n", .{ k.*, optV.?.* });
-            // debug.warn(" key for string \"{}\" \n", .{k.*});
+            debug.print("  {any}  value : {any}\n", .{ k.*, optV.?.* });
+            // debug.print(" key for string \"{}\" \n", .{k.*});
             const ovbg = try l.get(k.*);
             if (ovbg) |rv| {
-                debug.warn("  {}  value : {}\n", .{ k.*, rv.* });
+                debug.print("  {any}  value : {any}\n", .{ k.*, rv.* });
             }
         }
         if (optV) |v| {
             defer allocator.destroy(v);
-            debug.warn(" value for string \"{}\" \n", .{v.*});
+            debug.print(" value for string \"{any}\" \n", .{v.*});
         }
         it.next();
     }
@@ -441,20 +435,19 @@ test "test storing letters" {
 }
 
 test "test marshalling" {
-    debug.warn("start marshall tests\n", .{});
-    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-    defer arena.deinit();
-    const allocator = &arena.allocator;
+    debug.print("start marshall tests\n", .{});
+
+    var allocator = std.heap.c_allocator;
 
     const StringMarshall = ArrSerDeserType(u8);
     const stringToMarshall = "hello\x00";
-    debug.warn("original string ptr \"{}\"\n", .{@ptrToInt(stringToMarshall)});
+    debug.print("original string ptr \"{}\"\n", .{@ptrToInt(stringToMarshall)});
 
     const sspan = mem.span(stringToMarshall);
-    debug.warn("span type \"{}\"\n", .{@typeInfo(@TypeOf(sspan))});
-    const marshalledC = StringMarshall.marshall(&sspan, allocator);
-    debug.warn("marshalled \"{}\", ptr {} \n", .{ marshalledC, marshalledC.ptr });
-    debug.warn("pointer to first element {} \n", .{@ptrToInt(marshalledC.ptr)});
+    debug.print("span type \"{}\"\n", .{@typeInfo(@TypeOf(sspan))});
+    const marshalledC = StringMarshall.marshall(&sspan, &allocator);
+    debug.print("marshalled \"{any}\", ptr {any} \n", .{ marshalledC, marshalledC.ptr });
+    debug.print("pointer to first element {} \n", .{@ptrToInt(marshalledC.ptr)});
 
     debug.assert(&marshalledC[0] == &stringToMarshall[0]);
 }
@@ -462,12 +455,10 @@ test "test marshalling" {
 test "test reading" {
     var filename = "countingstorage\x00";
 
-    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-    defer arena.deinit();
-    const allocator = &arena.allocator;
-
+    var allocator = std.heap.c_allocator;
+    
     const SS = LevelDBHash(u32, u32);
-    var l = try SS.init(allocator);
+    var l = try SS.init(&allocator);
     defer l.deinit();
 
     _ = try l.open(filename);
@@ -480,35 +471,33 @@ test "test reading" {
     l.close();
 }
 
-test "test serialization types" {
-    // var filename : [100]u8 = [_]u8{0} ** 100;
-    var filename = "hellosimpletypes2\x00";
+// test "test serialization types" {
+//     // var filename : [100]u8 = [_]u8{0} ** 100;
+//     var filename = "hellosimpletypes2\x00";
 
-    var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
-    defer arena.deinit();
-    const allocator = &arena.allocator;
+//     var allocator = std.heap.c_allocator;
 
-    const u32SerializationType = SerDeserType(u32);
-    const u8ArrSerializationType = ArrSerDeserType(u8);
-    const SS = LevelDBHashWithSerialization(u32, u32, u32, u8, []const u8, []u8, u32SerializationType, u8ArrSerializationType);
+//     const u32SerializationType = SerDeserType(u32);
+//     const u8ArrSerializationType = ArrSerDeserType(u8);
+//     const SS = LevelDBHashWithSerialization(u32, u32, u32, u8, []const u8, []u8, u32SerializationType, u8ArrSerializationType);
 
-    var l = try SS.init(allocator);
+//     var l = try SS.init(&allocator);
 
-    _ = try l.open(filename);
-    var h = @intCast(u32, 5);
-    var w = [_]u8{ 'w', 'o', 'r', 'l', 'd', 0x00 };
-    // debug.warn("slice size : {}\n", .{w[0..].len});
-    _ = try l.put(h, w[0..]);
+//     _ = try l.open(filename);
+//     var h = @intCast(u32, 5);
+//     var w = [_]u8{ 'w', 'o', 'r', 'l', 'd', 0x00 };
+//     // debug.print("slice size : {}\n", .{w[0..].len});
+//     _ = try l.put(h, w[0..]);
 
-    const t = try l.get(h);
-    debug.warn("returned value {}\n", .{t.?.*});
-    if (t) |result| {
-        debug.warn("result is :{}\n", .{result.*});
-        // debug.warn("result type is :{}\n", .{@TypeOf(result.*)});
-    }
+//     const t = try l.get(h);
+//     debug.print("returned value {}\n", .{t.?.*});
+//     if (t) |result| {
+//         debug.print("result is :{}\n", .{result.*});
+//         // debug.print("result type is :{}\n", .{@TypeOf(result.*)});
+//     }
 
-    defer l.close();
-}
+//     defer l.close();
+// }
 
 // RAW C API Tests
 

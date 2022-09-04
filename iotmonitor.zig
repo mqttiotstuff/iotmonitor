@@ -38,7 +38,7 @@ const tracy = @import("tracy");
 const stdoutFile = std.io.getStdOut();
 const out = std.fs.File.writer(stdoutFile);
 
-const Verbose = false;
+const Verbose = true;
 
 // This structure defines the process informations
 // with live agent running, this permit to track the process and
@@ -176,7 +176,7 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
         assert(watchValue.len > 0);
         device.watchTopics = try stripLastWildCard(watchValue);
         if (Verbose) {
-            _ = try out.print("add {} to device {} \n", .{ device.name, device.watchTopics });
+            _ = try out.print("add {s} to device {s} \n", .{ device.name, device.watchTopics });
         }
     } else {
         return error.DEVICE_MUST_HAVE_A_WATCH_TOPIC;
@@ -189,7 +189,7 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
         assert(watchValue.len > 0);
         device.stateTopics = try stripLastWildCard(watchValue);
         if (Verbose) {
-            _ = try out.print("add {} to device {} \n", .{ device.name, device.stateTopics });
+            _ = try out.print("add {s} to device {s} \n", .{ device.name, device.stateTopics });
         }
     }
 
@@ -206,7 +206,7 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
         const timeOutValue = timeout.Integer;
         device.timeoutValue = @intCast(u32, timeOutValue);
         if (Verbose) {
-            _ = try out.print("watch timeout for topic for device {}\n", .{device.helloTopic});
+            _ = try out.print("watch timeout for topic for device {s}\n", .{device.helloTopic});
         }
     }
 
@@ -244,14 +244,14 @@ fn parseTomlConfig(allocator: mem.Allocator, _alldevices: *AllDevices, filename:
                     const isAgent = mem.eql(u8, table.name.ptr[0..AGENTPREFIX.len], AGENTPREFIX);
                     if (isDevice or isAgent) {
                         if (Verbose) {
-                            try out.print("device found :{}\n", .{table.name.*});
+                            try out.print("device found :{s}\n", .{table.name});
                         }
                         var prefixlen = AGENTPREFIX.len;
                         if (isDevice) prefixlen = DEVICEPREFIX.len;
 
                         const dev = try parseDevice(allocator, table.name.ptr[prefixlen..table.name.len], table);
                         if (Verbose) {
-                            try out.print("add {} to device list, with watch {} and state {} \n", .{ dev.name, dev.watchTopics, dev.stateTopics });
+                            try out.print("add {s} to device list, with watch {s} and state {s} \n", .{ dev.name, dev.watchTopics, dev.stateTopics });
                         }
                         _ = try _alldevices.put(dev.name, dev);
                     } else {
@@ -343,8 +343,8 @@ fn callback(topic: []u8, message: []u8) !void {
 
     // MQTT callback
     if (Verbose) {
-        try out.print("on topic {}\n", .{topic});
-        try out.print("  message arrived {}\n", .{message});
+        try out.print("on topic {s}\n", .{topic});
+        try out.print("  message arrived {s}\n", .{message});
         try out.writeAll(topic);
         try out.writeAll("\n");
     }
@@ -356,7 +356,7 @@ fn callback(topic: []u8, message: []u8) !void {
     while (iterator.next()) |e| {
         const deviceInfo = e.value_ptr.*;
         if (Verbose) {
-            try out.print("evaluate {} with {} \n", .{ deviceInfo.stateTopics, topic });
+            try out.print("evaluate {s} with {s} \n", .{ deviceInfo.stateTopics, topic });
         }
         const watchTopic = deviceInfo.watchTopics;
         const storeTopic = deviceInfo.stateTopics;
@@ -369,7 +369,7 @@ fn callback(topic: []u8, message: []u8) !void {
                 // store sub topic in leveldb
                 // trigger the refresh for timeout
                 if (Verbose) {
-                    try out.print("sub topic to store value :{}, in {}\n", .{ message, topic });
+                    try out.print("sub topic to store value :{s}, in {s}\n", .{ message, topic });
                     try out.print("length {}\n", .{topic.len});
                 }
                 db.put(topic, message) catch |errStorage| {
@@ -407,7 +407,7 @@ fn callback(topic: []u8, message: []u8) !void {
                                     var stateTopic = itstorage.iterValue();
                                     if (stateTopic) |stateTopicValue| {
                                         if (Verbose) {
-                                            try out.print("sending state {} to topic {}\n", .{ stateTopic.?.*, slice });
+                                            try out.print("sending state {s} to topic {s}\n", .{ stateTopic.?.*, slice });
                                         }
                                         defer globalAllocator.destroy(stateTopicValue);
                                         const topicWithSentinel = try globalAllocator.allocSentinel(u8, storedTopicValue.*.len, 0);
@@ -577,7 +577,7 @@ fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {
             var itCmdLine = processInformation.iterator();
             while (itCmdLine.next()) |a| {
                 if (Verbose) {
-                    out.print("look in {}\n", .{a.ptr}) catch unreachable;
+                    out.print("look in {s}\n", .{a}) catch unreachable;
                 }
 
                 const bufferMagic = globalAllocator.allocSentinel(u8, MAGIC_BUFFER_SIZE, 0) catch unreachable;
@@ -586,7 +586,7 @@ fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {
 
                 const p = c.strstr(a.ptr, bufferMagic.ptr);
                 if (Verbose) {
-                    out.print("found {}\n", .{p}) catch unreachable;
+                    out.print("found {s}\n", .{p}) catch unreachable;
                 }
                 if (p != null) {
                     // found in arguments, remember the pid

@@ -586,7 +586,7 @@ fn handleCheckAgent(processInformation: *processlib.ProcessInformation) void {
 
                 const p = c.strstr(a.ptr, bufferMagic.ptr);
                 if (Verbose) {
-                    out.print("found {s}\n", .{p}) catch unreachable;
+                    out.print("found {*}\n", .{p}) catch unreachable;
                 }
                 if (p != null) {
                     // found in arguments, remember the pid

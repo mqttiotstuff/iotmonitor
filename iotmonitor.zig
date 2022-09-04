@@ -148,7 +148,7 @@ pub fn secureZero(s: []u8) void {
 fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !*MonitoringInfo {
     const device = try MonitoringInfo.init(allocator);
     errdefer device.deinit();
-    const allocName = try allocator.alloc(u8, name.len + 1);
+    const allocName = try allocator.alloc(u8, name.len); // +1
  
     secureZero(allocName);
 
@@ -173,7 +173,8 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
         // strip it to compare to the received topic
         const watchValue = watch.String;
         assert(watchValue.len > 0);
-        device.watchTopics = try stripLastWildCard(watchValue);
+
+        device.watchTopics =  try stripLastWildCard(watchValue);
         if (Verbose) {
             _ = try out.print("add {s} to device {s} \n", .{ device.name, device.watchTopics });
         }

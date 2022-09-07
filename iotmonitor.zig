@@ -327,9 +327,6 @@ fn parseTomlConfig(allocator: mem.Allocator, _alldevices: *AllDevices, filename:
             mem.copy(u8, httpconf.listenAddress, localhostip);
         }
 
-        try out.print("listenAddress : {s}\n", .{httpconf.listenAddress});
-        try out.print("listenAddress size : {}\n", .{httpconf.listenAddress.len});
-
         if (httpconfig.Table.keys.get("port")) |port| {
             httpconf.*.port = @intCast(u16, port.Integer);
         } else {

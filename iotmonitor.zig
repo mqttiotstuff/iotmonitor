@@ -38,7 +38,7 @@ const tracy = @import("tracy");
 const stdoutFile = std.io.getStdOut();
 const out = std.fs.File.writer(stdoutFile);
 
-const Verbose = true;
+const Verbose = false;
 
 // This structure defines the process informations
 // with live agent running, this permit to track the process and

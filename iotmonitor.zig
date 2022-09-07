@@ -136,7 +136,7 @@ test "test update time" {
 }
 
 pub fn secureZero(s: []u8) void {
-    var i:u32 = 0;
+    var i: u32 = 0;
     while (i < s.len) {
         s[i] = '\x00';
         i = i + 1;
@@ -149,7 +149,7 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
     const device = try MonitoringInfo.init(allocator);
     errdefer device.deinit();
     const allocName = try allocator.alloc(u8, name.len + 1);
- 
+
     secureZero(allocName);
 
     std.mem.copy(u8, allocName, name);
@@ -174,7 +174,7 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
         const watchValue = watch.String;
         assert(watchValue.len > 0);
 
-        device.watchTopics =  try stripLastWildCard(watchValue);
+        device.watchTopics = try stripLastWildCard(watchValue);
         if (Verbose) {
             _ = try out.print("add {s} to device {s} \n", .{ device.name, device.watchTopics });
         }
@@ -187,7 +187,10 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
         // strip it to compare to the received topic
         const watchValue = watch.String;
         assert(watchValue.len > 0);
-        device.stateTopics = try stripLastWildCard(watchValue);
+        const strippedLastWildCard = try stripLastWildCard(watchValue);
+        const stopic = try allocator.alloc(u8, strippedLastWildCard.len);
+        mem.copy(u8, stopic, strippedLastWildCard);
+        device.stateTopics = stopic;
         if (Verbose) {
             _ = try out.print("add {s} to device {s} \n", .{ device.name, device.stateTopics });
         }
@@ -215,7 +218,7 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
 }
 
 const Config = struct { clientId: []u8, mqttBroker: []u8, user: []u8, password: []u8, clientid: []u8, mqttIotmonitorBaseTopic: []u8 };
-const HttpServerConfig = struct { activateHttp: bool = true, listenAddress: []const u8, port: u16 = 8079 };
+const HttpServerConfig = struct { activateHttp: bool = true, listenAddress: []u8, port: u16 = 8079 };
 
 var MqttConfig: *Config = undefined;
 var HttpConfig: *HttpServerConfig = undefined;
@@ -259,7 +262,7 @@ fn parseTomlConfig(allocator: mem.Allocator, _alldevices: *AllDevices, filename:
                     }
                 }
             },
-            toml.Value.None, toml.Value.String, toml.Value.Boolean, toml.Value.Integer, toml.Value.Array, toml.Value.ManyTables => continue,
+            toml.Value.None, toml.Value.String, toml.Value.Boolean, toml.Value.Integer, toml.Value.Float, toml.Value.Array, toml.Value.ManyTables => continue,
         }
     }
 
@@ -312,10 +315,16 @@ fn parseTomlConfig(allocator: mem.Allocator, _alldevices: *AllDevices, filename:
         httpconf.*.activateHttp = true;
 
         if (httpconfig.Table.keys.get("bind")) |baddr| {
-            httpconf.listenAddress = baddr.String;
+            httpconf.listenAddress = try allocator.alloc(u8, baddr.String.len);
+            mem.copy(u8, httpconf.listenAddress, baddr.String);
         } else {
-            httpconf.listenAddress = "127.0.0.1";
+            const localhostip = "127.0.0.1";
+            httpconf.listenAddress = try allocator.alloc(u8, localhostip.len);
+            mem.copy(u8, httpconf.listenAddress, localhostip);
         }
+
+        try out.print("listenAddress : {s}\n", .{httpconf.listenAddress});
+        try out.print("listenAddress size : {}\n", .{httpconf.listenAddress.len});
 
         if (httpconfig.Table.keys.get("port")) |port| {
             httpconf.*.port = @intCast(u16, port.Integer);
@@ -446,12 +455,11 @@ const AllDevices = std.StringHashMap(*MonitoringInfo);
 const DiskHash = leveldb.LevelDBHashArray(u8, u8);
 
 // global variables
-var globalAllocator = std.heap.c_allocator;
+var globalAllocator = std.heap.raw_c_allocator;
 var alldevices: AllDevices = undefined;
 var db: *DiskHash = undefined;
 
 test "read whole database" {
-    
     db = try DiskHash.init(&globalAllocator);
     const filename = "iotdb.leveldb";
     _ = try db.open(filename);
@@ -792,11 +800,9 @@ pub fn main() !void {
         clap.parseParam("<TOML CONFIG FILE>...") catch unreachable,
     };
 
-
     var diag = clap.Diagnostic{};
 
-    var args = clap.parse(clap.Help, &params, 
-        .{ .diagnostic = &diag }) catch |err| {
+    var args = clap.parse(clap.Help, &params, .{ .diagnostic = &diag }) catch |err| {
         // Report useful error and exit
         diag.report(io.getStdErr().writer(), err) catch {};
         return err;
@@ -879,7 +885,7 @@ pub fn main() !void {
             .{},
             .{routez.all("/", indexHandler)},
         );
-        addr = try Address.parseIp(HttpConfig.*.listenAddress, HttpConfig.*.port);
+        addr = try Address.parseIp4(HttpConfig.*.listenAddress, HttpConfig.*.port);
 
         const threadConfig: Thread.SpawnConfig = .{};
         const threadHandle = try Thread.spawn(threadConfig, startServer, .{.{}});

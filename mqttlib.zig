@@ -38,13 +38,13 @@ pub const MqttCnx = struct {
 
     // this message is received in an other thread
     fn _defaultCallback(topic: []u8, message: []u8) void {
-        _ = c.printf("%s -> %s", topic.ptr, message.ptr);
+        _ = c.printf("%s -> %s\n", topic.ptr, message.ptr);
     }
 
     fn _connLost(ctx: ?*anyopaque, m: [*c]u8) callconv(.C) void {
         _ = m;
         const self_ctx = @intToPtr(*Self, @ptrToInt(ctx));
-        _ = c.printf("connection lost %d", self_ctx);
+        _ = c.printf("connection lost %d\n", self_ctx);
     }
 
     fn _msgArrived(ctx: ?*anyopaque, topic: [*c]u8, topic_length: c_int, message: [*c]cmqtt.MQTTClient_message) callconv(.C) c_int {
@@ -186,7 +186,7 @@ pub const MqttCnx = struct {
         }
 
         const r = cmqtt.MQTTClient_connect(self.handle, self.connect_option);
-        _ = c.printf("connect to mqtt returned %d\n\x00", r);
+        _ = c.printf("connect to mqtt returned %d\n", r);
         if (r != 0) return error.MQTTConnectError;
         self.connected = true;
 

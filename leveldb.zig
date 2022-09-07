@@ -380,7 +380,7 @@ test "test storing letters" {
 
     _ = try l.open(filename);
 
-    const MAX_ITERATIONS = 1_000_000;
+    const MAX_ITERATIONS = 100_000;
 
     var i: u64 = 0;
     while (i < MAX_ITERATIONS) {
@@ -434,42 +434,42 @@ test "test storing letters" {
     l.close();
 }
 
-test "test marshalling" {
-    debug.print("start marshall tests\n", .{});
+// test "test marshalling" {
+//     debug.print("start marshall tests\n", .{});
 
-    var allocator = std.heap.c_allocator;
+//     var allocator = std.heap.c_allocator;
 
-    const StringMarshall = ArrSerDeserType(u8);
-    const stringToMarshall = "hello\x00";
-    debug.print("original string ptr \"{}\"\n", .{@ptrToInt(stringToMarshall)});
+//     const StringMarshall = ArrSerDeserType(u8);
+//     const stringToMarshall = "hello\x00";
+//     debug.print("original string ptr \"{}\"\n", .{@ptrToInt(stringToMarshall)});
 
-    const sspan = mem.span(stringToMarshall);
-    debug.print("span type \"{}\"\n", .{@typeInfo(@TypeOf(sspan))});
-    const marshalledC = StringMarshall.marshall(&sspan, &allocator);
-    debug.print("marshalled \"{any}\", ptr {any} \n", .{ marshalledC, marshalledC.ptr });
-    debug.print("pointer to first element {} \n", .{@ptrToInt(marshalledC.ptr)});
+//     const sspan = mem.span(stringToMarshall);
+//     debug.print("span type \"{}\"\n", .{@typeInfo(@TypeOf(sspan))});
+//     const marshalledC = StringMarshall.marshall(&sspan, &allocator);
+//     debug.print("marshalled \"{any}\", ptr {any} \n", .{ marshalledC, marshalledC.ptr });
+//     debug.print("pointer to first element {} \n", .{@ptrToInt(marshalledC.ptr)});
 
-    debug.assert(&marshalledC[0] == &stringToMarshall[0]);
-}
+//     debug.assert(&marshalledC[0] == &stringToMarshall[0]);
+// }
 
-test "test reading" {
-    var filename = "countingstorage\x00";
+// test "test reading" {
+//     var filename = "countingstorage\x00";
 
-    var allocator = std.heap.c_allocator;
+//     var allocator = std.heap.c_allocator;
     
-    const SS = LevelDBHash(u32, u32);
-    var l = try SS.init(&allocator);
-    defer l.deinit();
+//     const SS = LevelDBHash(u32, u32);
+//     var l = try SS.init(&allocator);
+//     defer l.deinit();
 
-    _ = try l.open(filename);
-    var i: u32 = 0;
-    while (i < 1000) {
-        const v = try l.get(i);
-        debug.assert(v.?.* == i + 10);
-        i += 1;
-    }
-    l.close();
-}
+//     _ = try l.open(filename);
+//     var i: u32 = 0;
+//     while (i < 1000) {
+//         const v = try l.get(i);
+//         debug.assert(v.?.* == i + 10);
+//         i += 1;
+//     }
+//     l.close();
+// }
 
 // test "test serialization types" {
 //     // var filename : [100]u8 = [_]u8{0} ** 100;

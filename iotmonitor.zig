@@ -201,7 +201,7 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
     if (entry.keys.get("helloTopic")) |hello| {
         const helloValue = hello.String;
         assert(helloValue.len > 0);
-        const stopic = try allocator.alloc(u8, strippedLastWildCard.len);
+        const stopic = try allocator.alloc(u8, helloValue.len);
         mem.copy(u8, stopic, helloValue);
         device.helloTopic = stopic;
         if (Verbose) {

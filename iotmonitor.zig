@@ -173,8 +173,10 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
         // strip it to compare to the received topic
         const watchValue = watch.String;
         assert(watchValue.len > 0);
-
-        device.watchTopics = try stripLastWildCard(watchValue);
+        const strippedLastWildCard = try stripLastWildCard(watchValue);
+        const stopic = try allocator.alloc(u8, strippedLastWildCard.len);
+        mem.copy(u8, stopic, strippedLastWildCard);
+        device.watchTopics = stopic;
         if (Verbose) {
             _ = try out.print("add {s} to device {s} \n", .{ device.name, device.watchTopics });
         }
@@ -182,10 +184,10 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
         return error.DEVICE_MUST_HAVE_A_WATCH_TOPIC;
     }
 
-    if (entry.keys.get("stateTopics")) |watch| {
+    if (entry.keys.get("stateTopics")) |statewatch| {
         // there may have a wildcard at the end
         // strip it to compare to the received topic
-        const watchValue = watch.String;
+        const watchValue = statewatch.String;
         assert(watchValue.len > 0);
         const strippedLastWildCard = try stripLastWildCard(watchValue);
         const stopic = try allocator.alloc(u8, strippedLastWildCard.len);
@@ -199,7 +201,9 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
     if (entry.keys.get("helloTopic")) |hello| {
         const helloValue = hello.String;
         assert(helloValue.len > 0);
-        device.helloTopic = helloValue;
+        const stopic = try allocator.alloc(u8, strippedLastWildCard.len);
+        mem.copy(u8, stopic, helloValue);
+        device.helloTopic = stopic;
         if (Verbose) {
             _ = try out.print("hello topic for device {s}\n", .{device.helloTopic});
         }

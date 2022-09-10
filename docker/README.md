@@ -11,7 +11,7 @@ Optional, The COMMIT variable may be specified for the ZIG commit to use (zig de
 
 for officiel release zig version:
 
-	docker build --build-arg VERSION=0.8.0 -t iotmonitor .
+	docker build --build-arg VERSION=0.9.1 -t iotmonitor .
 
 	docker build --build-arg COMMIT=45212e3b3 --build-arg VERSION=0.9.0-dev.103 -t iotmonitor .
 

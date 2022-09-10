@@ -17,13 +17,13 @@
     },
     "nixpkgs": {
       "locked": {
-        "narHash": "sha256-VqbRz9pYKzyLG5QDyx3WRDXtgJj4hrVrndfHQKNY8Ck=",
+        "narHash": "sha256-M6bJShji9AIDZ7Kh7CPwPBPb/T7RiVev2PAcOi4fxDQ=",
         "type": "tarball",
-        "url": "https://github.com/NixOS/nixpkgs/archive/d9c13cf44ec1b6de95cb1ba83c296611d19a71ae.tar.gz"
+        "url": "https://github.com/NixOS/nixpkgs/archive/22.05.tar.gz"
       },
       "original": {
         "type": "tarball",
-        "url": "https://github.com/NixOS/nixpkgs/archive/d9c13cf44ec1b6de95cb1ba83c296611d19a71ae.tar.gz"
+        "url": "https://github.com/NixOS/nixpkgs/archive/22.05.tar.gz"
       }
     },
     "root": {

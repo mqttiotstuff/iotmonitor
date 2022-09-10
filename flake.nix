@@ -2,14 +2,8 @@
   description = "Flake for building Iotmonitor";
   # inputs = [ zig git cmake leveldb pandoc ];
   inputs = { 
-
-      #  nixpkgs.url = "github:NixOS/nixpkgs/nixos-21.11";
-      # To have zig 0.9, unstable one, .. 
-nixpkgs.url = "https://github.com/NixOS/nixpkgs/archive/d9c13cf44ec1b6de95cb1ba83c296611d19a71ae.tar.gz";
-
- flake-utils.url = "github:numtide/flake-utils";
-
-
+      nixpkgs.url = "https://github.com/NixOS/nixpkgs/archive/22.05.tar.gz";
+      flake-utils.url = "github:numtide/flake-utils";
   };
 
   outputs = { self, nixpkgs, flake-utils }: 

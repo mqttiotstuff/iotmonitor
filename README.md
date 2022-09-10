@@ -53,7 +53,7 @@ nix-shell
 #### Using Nix Flake
 
 
-	nix run git+https://github.com/mqttiotstuff/iotmonitor?submodules=1
+     nix run git+https://github.com/mqttiotstuff/iotmonitor?submodules=1
 
 
 build with flake :

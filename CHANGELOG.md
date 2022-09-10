@@ -1,5 +1,10 @@
 
 
+## Version 0.2.7
+
+- move to zig 0.9.1
+- allocation bug fixes
+
 ## Version 0.2.5
 
 - add nix support for distribution and compilation

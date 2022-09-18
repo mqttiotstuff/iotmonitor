@@ -1,6 +1,6 @@
 name: iotmonitor
 base: core18
-version: '0.2.6+git'
+version: '0.2.7+git'
 summary: Monitor MQTT IOT devices or agents to make them run 
 description: |
   IotMonitor solve the "always up" problem of large IOT devices and agents system. 

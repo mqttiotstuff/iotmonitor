@@ -97,7 +97,8 @@ test "use of noMarshallFn" {
 
 // create level db type for single element,
 pub fn LevelDBHash(comptime K: type, comptime V: type) type {
-    return LevelDBHashWithSerialization(K, K, K, V, V, V, SerDeserType(K), SerDeserType(V));
+    return LevelDBHashWithSerialization(K, K, K, V, V, V, 
+                    SerDeserType(K), SerDeserType(V));
 }
 
 // create a leveldb type for arrays of element, for instance
@@ -197,7 +198,9 @@ pub fn LevelDBHashWithSerialization(
             // defer self.allocator.free(marshalledKey);
             const marshalledValue = VSerDeser.marshall(&value, self.allocator);
             // defer self.allocator.free(marshalledValue);
-            cleveldb.leveldb_put(self.leveldbHandle, self.writeOptions, marshalledKey.ptr, marshalledKey.len, marshalledValue.ptr, marshalledValue.len, &err);
+            cleveldb.leveldb_put(self.leveldbHandle, self.writeOptions, 
+                marshalledKey.ptr, marshalledKey.len, 
+                marshalledValue.ptr, marshalledValue.len, &err);
             if (err != null) {
                 log.warn("{s}", .{"open failed"});
                 defer cleveldb.leveldb_free(err);
@@ -206,13 +209,16 @@ pub fn LevelDBHashWithSerialization(
         }
 
         // retrieve the content of a key
-        pub fn get(self: *Self, key: KIN) !?*align(1) VOUT {
+        pub fn get(self: *Self, key: KIN) !?* align(1)VOUT {
             var read: ?[*]u8 = undefined;
             var read_len: usize = 0;
             var err: [*c]u8 = null;
             const marshalledKey = KSerDeser.marshall(&key, self.allocator);
             // defer self.allocator.free(marshalledKey);
-            read = cleveldb.leveldb_get(self.leveldbHandle, self.readOptions, marshalledKey.ptr, marshalledKey.len, &read_len, &err);
+            read = cleveldb.leveldb_get(self.leveldbHandle, self.readOptions, 
+                    marshalledKey.ptr, marshalledKey.len, 
+                    &read_len, &err);
+            _ = c.printf("keylength %d, %s", read_len, read  );
 
             if (err != null) {
                 _ = c.printf("open failed");
@@ -226,11 +232,20 @@ pub fn LevelDBHashWithSerialization(
             const torelease = @ptrCast(*anyopaque, read);
             defer cleveldb.leveldb_free(torelease);
             // _ = c.printf("returned : %s %d\n", read, read_len);
+            
             const structAddr = @ptrToInt(read);
+
             var cmsg = @intToPtr([*]u8, structAddr);
             const vTypePtr = VSerDeser.unMarshall(cmsg[0..read_len], self.allocator);
+            
             //return &cmsg[0..read_len];
-            return vTypePtr;
+            var allocatedResult = try self.allocator.alloc(u8, read_len);
+            mem.copy(u8, allocatedResult, vTypePtr.*);
+
+            var arrayptr = try self.allocator.create([]u8);
+            arrayptr.* = allocatedResult; 
+
+            return arrayptr;
         }
 
         // iterator structure
@@ -243,6 +258,7 @@ pub fn LevelDBHashWithSerialization(
 
             fn init(allocator: *Allocator, db: *Self) !*Iterator {
                 const obj = try allocator.create(Iterator);
+                errdefer allocator.destroy(obj);
                 obj.allocator = allocator;
                 const result = cleveldb.leveldb_create_iterator(db.leveldbHandle, db.readOptions);
                 if (result) |innerhandle| {
@@ -250,6 +266,10 @@ pub fn LevelDBHashWithSerialization(
                     return obj;
                 }
                 return error.CannotCreateIterator;
+            }
+            
+            pub fn deinit(self: *ItSelf) void {
+                cleveldb.leveldb_iter_destroy(self.innerIt);
             }
 
             pub fn first(self: *ItSelf) void {
@@ -297,9 +317,7 @@ pub fn LevelDBHashWithSerialization(
                 return result > 0;
             }
 
-            pub fn deinit(self: *ItSelf) void {
-                cleveldb.leveldb_iter_destroy(self.innerIt);
-            }
+           
         };
 
         pub fn iterator(self: *Self) !*Iterator {
@@ -310,7 +328,7 @@ pub fn LevelDBHashWithSerialization(
 
 test "test iterators" {
     // already created database
-    var filename = "countingstorage\x00";
+    var filename = "countingstorage";
 
     var allocator = std.heap.c_allocator;
 
@@ -350,27 +368,9 @@ test "test no specialization" {
     // assert(l != null);
 }
 
-test "test storing ints" {
-    var filename = "countingstorage\x00";
- 
-    var allocator = std.heap.c_allocator;
-
-    const SS = LevelDBHash(u32, u32);
-    var l = try SS.init(&allocator);
-    defer l.deinit();
-
-    _ = try l.open(filename);
-
-    var i: u32 = 0;
-    while (i < 1000) {
-        try l.put(i, i + 10);
-        i += 1;
-    }
-    l.close();
-}
 
 test "test storing letters" {
-    var filename = "stringstoragetest\x00";
+    var filename = "stringstoragetest";
 
     var allocator = std.heap.c_allocator;
 
@@ -379,6 +379,7 @@ test "test storing letters" {
     defer l.deinit();
 
     _ = try l.open(filename);
+    defer l.close();
 
     const MAX_ITERATIONS = 100_000;
 
@@ -403,13 +404,15 @@ test "test storing letters" {
     debug.print("test key length : {}\n", .{t[0..].len});
     const lecturealea = try l.get(t[0..]);
     debug.assert(lecturealea != null);
-    debug.print("retrieved : {}\n", .{lecturealea});
+    debug.print("retrieved : {s}\n", .{lecturealea});
     if (lecturealea) |value| {
+        debug.print("random read value, retrieved : {}\n", .{value});
         allocator.destroy(value);
     }
     const it = try l.iterator();
+    defer it.deinit();
     defer allocator.destroy(it);
-    defer l.deinit();
+    
     it.first();
     while (it.isValid()) {
         const optK = it.iterKey();
@@ -419,8 +422,8 @@ test "test storing letters" {
             debug.print("  {any}  value : {any}\n", .{ k.*, optV.?.* });
             // debug.print(" key for string \"{}\" \n", .{k.*});
             const ovbg = try l.get(k.*);
-            if (ovbg) |rv| {
-                debug.print("  {any}  value : {any}\n", .{ k.*, rv.* });
+            if (ovbg) |rv| {                
+                debug.print("random :  {any}  value : {any}\n", .{ k.*, rv.*[0..] });
             }
         }
         if (optV) |v| {
@@ -429,31 +432,54 @@ test "test storing letters" {
         }
         it.next();
     }
-    it.deinit();
 
-    l.close();
+    debug.print("closing all\n", .{});
+   
 }
 
-// test "test marshalling" {
-//     debug.print("start marshall tests\n", .{});
+test "test marshalling" {
+    debug.print("start marshall tests\n", .{});
 
+    var allocator = std.heap.c_allocator;
+
+    const StringMarshall = ArrSerDeserType(u8);
+    const stringToMarshall = "hello";
+    debug.print("original string ptr {}\n", .{@ptrToInt(stringToMarshall)});
+
+    const sspan = mem.span(stringToMarshall);
+    debug.print("span type \"{}\"\n", .{@typeInfo(@TypeOf(sspan))});
+    debug.print("span {any}\n", .{sspan});
+
+    const marshalledC = StringMarshall.marshall(&sspan, &allocator);
+    debug.print("marshalled \"{any}\", ptr {any} \n", .{ marshalledC, marshalledC.ptr });
+    debug.print("pointer to first element {} \n", .{@ptrToInt(marshalledC.ptr)});
+
+    debug.assert(&marshalledC[0] == &stringToMarshall[0]);
+}
+
+// test "test storing ints" {
+//     var filename = "countingstorage";
+ 
 //     var allocator = std.heap.c_allocator;
 
-//     const StringMarshall = ArrSerDeserType(u8);
-//     const stringToMarshall = "hello\x00";
-//     debug.print("original string ptr \"{}\"\n", .{@ptrToInt(stringToMarshall)});
+//     const SS = LevelDBHash(u32, u32);
+//     var l = try SS.init(&allocator);
+//     defer l.deinit();
 
-//     const sspan = mem.span(stringToMarshall);
-//     debug.print("span type \"{}\"\n", .{@typeInfo(@TypeOf(sspan))});
-//     const marshalledC = StringMarshall.marshall(&sspan, &allocator);
-//     debug.print("marshalled \"{any}\", ptr {any} \n", .{ marshalledC, marshalledC.ptr });
-//     debug.print("pointer to first element {} \n", .{@ptrToInt(marshalledC.ptr)});
+//     _ = try l.open(filename);
+//     defer l.close();
 
-//     debug.assert(&marshalledC[0] == &stringToMarshall[0]);
+//     var i: u32 = 0;
+//     while (i < 1000) {
+//         var value_to_store = i + 10;
+//         try l.put(i, value_to_store);
+//         i += 1;
+//     }
+   
 // }
 
-// test "test reading" {
-//     var filename = "countingstorage\x00";
+// test "test reading ints" {
+//     var filename = "countingstorage";
 
 //     var allocator = std.heap.c_allocator;
     
@@ -462,13 +488,17 @@ test "test storing letters" {
 //     defer l.deinit();
 
 //     _ = try l.open(filename);
+//     defer l.close();
+    
 //     var i: u32 = 0;
 //     while (i < 1000) {
 //         const v = try l.get(i);
-//         debug.assert(v.?.* == i + 10);
+//         if (v) |value| {
+//             debug.print("{}\n", .{value.*} ); //== i + 10
+//         }
 //         i += 1;
 //     }
-//     l.close();
+    
 // }
 
 // test "test serialization types" {
@@ -501,29 +531,30 @@ test "test storing letters" {
 
 // RAW C API Tests
 
-//test "creating file" {
-//    const options = cleveldb.leveldb_options_create();
-//    cleveldb.leveldb_options_set_create_if_missing(options, 1);
-//    var err: [*c]u8 = null;
-//    // const db = c.leveldb_open(options, "testdb", @intToPtr([*c][*c]u8,@ptrToInt(&err[0..])));
-//    const db = cleveldb.leveldb_open(options, "testdb", &err);
-//    if (err != null) {
-//        _ = c.printf("open failed");
-//        defer cleveldb.leveldb_free(err);
-//        return;
-//    }
-//    var woptions = cleveldb.leveldb_writeoptions_create();
-//    cleveldb.leveldb_put(db, woptions, "key", 3, "value", 6, &err);
-//
-//    const roptions = cleveldb.leveldb_readoptions_create();
-//    var read: [*c]u8 = null;
-//    var read_len: usize = 0;
-//    read = cleveldb.leveldb_get(db, roptions, "key", 3, &read_len, &err);
-//    if (err != null) {
-//        _ = c.printf("open failed");
-//        defer cleveldb.leveldb_free(err);
-//        return;
-//    }
-//    _ = c.printf("returned : %s %d\n", read, read_len);
-//    cleveldb.leveldb_close(db);
-//}
+test "creating file" {
+   const options = cleveldb.leveldb_options_create();
+   cleveldb.leveldb_options_set_create_if_missing(options, 1);
+   var err: [*c]u8 = null;
+   // const db = c.leveldb_open(options, "testdb", @intToPtr([*c][*c]u8,@ptrToInt(&err[0..])));
+
+   const db = cleveldb.leveldb_open(options, "testdb2", &err);
+   defer cleveldb.leveldb_close(db);
+   if (err != null) {
+       _ = c.printf("open failed");
+       defer cleveldb.leveldb_free(err);
+       return;
+   }
+   var woptions = cleveldb.leveldb_writeoptions_create();
+   cleveldb.leveldb_put(db, woptions, "key", 3, "value", 6, &err);
+
+   const roptions = cleveldb.leveldb_readoptions_create();
+   var read: [*c]u8 = null;
+   var read_len: usize = 0;
+   read = cleveldb.leveldb_get(db, roptions, "key", 3, &read_len, &err);
+   if (err != null) {
+       _ = c.printf("open failed");
+       defer cleveldb.leveldb_free(err);
+       return;
+   }
+   _ = c.printf("returned : %s %d\n", read, read_len);
+}

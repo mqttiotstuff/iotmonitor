@@ -52,7 +52,6 @@ pub fn getProcessInformations(pid: i32, processInfo: *ProcessInformation) !bool 
 
     const options = Dir.OpenDirOptions{
         .access_sub_paths = true,
-        .iterate = true,
     };
     var procDir = try fs.cwd().openDir("/proc", options);
     defer procDir.close();
@@ -93,9 +92,9 @@ const ProcessInformationCallback = fn (processInformation: *ProcessInformation) 
 pub fn listProcesses(callback: ProcessInformationCallback) !void {
     const options = Dir.OpenDirOptions{
         .access_sub_paths = true,
-        .iterate = true,
+        // .iterate = true,
     };
-    var procDir = try fs.cwd().openDir("/proc", options);
+    var procDir = try fs.cwd().openIterableDir("/proc", options);
     defer procDir.close();
 
     var dirIterator = procDir.iterate();

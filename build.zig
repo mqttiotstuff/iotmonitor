@@ -18,22 +18,22 @@ pub fn build(b: *Builder) void {
     exe.addPackagePath("clap", "zig-clap/clap.zig");
     exe.addPackage(.{
         .name = "routez",
-        .path = FileSource.relative("routez/src/routez.zig"),
+        .source = FileSource.relative("routez/src/routez.zig"),
         .dependencies = &[_]std.build.Pkg{.{
             .name = "zuri",
-            .path = FileSource.relative("routez/zuri/src/zuri.zig"),
+            .source = FileSource.relative("routez/zuri/src/zuri.zig"),
         }},
     });
 
     const Activate_Tracy = false;
 
     if (Activate_Tracy) {
-        exe.addPackage(.{ .name = "tracy", .path = FileSource.relative("zig-tracy/src/lib.zig") });
-        exe.addIncludeDir("tracy/");
-        exe.addLibPath("tracy/library/unix");
+        exe.addPackage(.{ .name = "tracy", .source = FileSource.relative("zig-tracy/src/lib.zig") });
+        exe.addIncludePath("tracy/");
+        exe.addLibraryPath("tracy/library/unix");
         exe.linkSystemLibrary("tracy-debug");
     } else {
-        exe.addPackage(.{ .name = "tracy", .path = FileSource.relative("nozig-tracy/src/lib.zig") });
+        exe.addPackage(.{ .name = "tracy", .source = FileSource.relative("nozig-tracy/src/lib.zig") });
     }
 
     exe.setOutputDir("bin");
@@ -44,9 +44,9 @@ pub fn build(b: *Builder) void {
     exe.linkLibC();
 
     // static add the paho mqtt library
-    exe.addIncludeDir("paho.mqtt.c/src");
-    exe.addLibPath("paho.mqtt.c/build/output");
-    exe.addLibPath("paho.mqtt.c/src");
+    exe.addIncludePath("paho.mqtt.c/src");
+    exe.addLibraryPath("paho.mqtt.c/build/output");
+    exe.addLibraryPath("paho.mqtt.c/src");
     exe.addObjectFile("paho.mqtt.c/src/libpaho-mqtt3c.a");
 
     // these libs are needed by leveldb backend

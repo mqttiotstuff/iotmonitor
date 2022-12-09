@@ -82,7 +82,7 @@ for building the project, the following elements are needed :
 - leveldb library (used for storing stated)
 - C compiler (builds essentials)
 - cmake
-- zig : 0.9.0
+- zig : 0.10.0
 
 then launch the following commands :
 
@@ -95,7 +95,7 @@ make
 cd ..
 
 mkdir bin
-zig build -Dcpu=baseline -Dtarget=native-native-gnu
+zig build -Dcpu=baseline -Dtarget=native-native-gnu -fstage1
 ```
 
 

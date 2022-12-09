@@ -518,10 +518,11 @@ fn launchProcess(monitoringInfo: *MonitoringInfo) !void {
             commandLineBuffer[0..c.strlen(commandLineBuffer)],
         };
 
-        var m = std.BufMap.init(globalAllocator);
+        var m = std.process.EnvMap.init(globalAllocator);
         // may add additional information about the process ...
         try m.put("IOTMONITORMAGIC", bufferMagic[0..c.strlen(bufferMagic)]);
 
+            
         // execute the process
         std.process.execve(globalAllocator, &argv, &m) catch {
             unreachable;
@@ -795,22 +796,27 @@ pub fn startServer(context: ServerCtx) void {
 
 // main procedure
 pub fn main() !void {
-    const params = comptime [_]clap.Param(clap.Help){
-        clap.parseParam("-h, --help             Display this help") catch unreachable,
-        clap.parseParam("-v, --version          Display version") catch unreachable,
-        clap.parseParam("<TOML CONFIG FILE>...") catch unreachable,
-    };
+    const params = comptime clap.parseParamsComptime(
+        \\-h, --help             Display this help
+        \\-v, --version          Display version
+        \\<TOML_CONFIG_FILE>...
+        \\
+    );
 
     var diag = clap.Diagnostic{};
 
-    var args = clap.parse(clap.Help, &params, .{ .diagnostic = &diag }) catch |err| {
+    const parsers = comptime .{
+        .TOML_CONFIG_FILE = clap.parsers.string,
+    };
+
+    var res = clap.parse(clap.Help, &params, parsers, .{ .diagnostic = &diag }) catch |err| {
         // Report useful error and exit
         diag.report(io.getStdErr().writer(), err) catch {};
         return err;
     };
-    defer args.deinit();
+    defer res.deinit();
 
-    if (args.flag("--help")) {
+    if (res.args.help) {
         debug.print("\n", .{});
         debug.print("start the iotmonitor deamon, usage :\n", .{});
         debug.print("    iotmonitor [optional config.toml filepath]\n", .{});
@@ -818,7 +824,7 @@ pub fn main() !void {
         return;
     }
 
-    if (args.flag("--version")) {
+    if (res.args.version) {
         debug.print("{s}", .{version.version});
         return;
     }
@@ -832,7 +838,7 @@ pub fn main() !void {
     var configurationFile = try globalAllocator.alloc(u8, defaultConfigFile.len);
     mem.copy(u8, configurationFile, defaultConfigFile);
     var arg_index: u32 = 0;
-    for (args.positionals()) |pos| {
+    for (res.positionals) |pos| {
         debug.print("{s}\n", .{pos});
         debug.print("{}\n", .{pos.len});
         if (arg_index == 0) {

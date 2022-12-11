@@ -1,4 +1,4 @@
-% IOTMONITOR(1) iotmonitor 0.2.3
+% IOTMONITOR(1) iotmonitor 0.2.9
 % Patrice Freydiere
 % December 2021
 

@@ -37,7 +37,7 @@
 
             installPhase = ''
               mkdir -p $out/bin
-              mv bin/iotmonitor $out/bin
+              cp bin/iotmonitor $out/bin
             '';
 
           };

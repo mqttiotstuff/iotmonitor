@@ -19,18 +19,20 @@
           pkgs.stdenv.mkDerivation {
             name = "iotmonitor";
             src = self;
-            buildInputs =
-              [ zig pkgs.git pkgs.cmake pkgs.leveldb pkgs.pandoc 
-              pkgs.llvmPackages_14.llvm ];
+            buildInputs = [
+              zig
+              pkgs.git
+              pkgs.cmake
+              pkgs.leveldb
+              pkgs.pandoc
+            ]; # pkgs.llvmPackages_14.llvm
             configurePhase = ''
               ls
               zig version
             '';
 
             buildPhase = ''
-              make
-              zig version
-              zig build -fstage1
+              make               
             '';
 
             installPhase = ''

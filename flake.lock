@@ -2,11 +2,11 @@
   "nodes": {
     "flake-utils": {
       "locked": {
-        "lastModified": 1642700792,
-        "narHash": "sha256-XqHrk7hFb+zBvRg6Ghl+AZDq03ov6OshJLiSWOoX5es=",
+        "lastModified": 1667395993,
+        "narHash": "sha256-nuEHfE/LcWyuSWnS8t12N1wc105Qtau+/OdUAjtQ0rA=",
         "owner": "numtide",
         "repo": "flake-utils",
-        "rev": "846b2ae0fc4cc943637d3d1def4454213e203cba",
+        "rev": "5aed5285a952e0b949eb3ba02c12fa4fcfef535f",
         "type": "github"
       },
       "original": {
@@ -61,20 +61,20 @@
       "inputs": {
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs",
-        "zig": "zig"
+        "zigpkgs": "zigpkgs"
       }
     },
-    "zig": {
+    "zigpkgs": {
       "inputs": {
         "flake-utils": "flake-utils_2",
         "nixpkgs": "nixpkgs_2"
       },
       "locked": {
-        "lastModified": 1670674070,
-        "narHash": "sha256-EOHlXEUJXWLnQj+ldpnFHDyTUYi2SYWsZiMUvkb8PZU=",
+        "lastModified": 1670760618,
+        "narHash": "sha256-mSCvXCEH9RghBhvO8cQfUi1rRxQ1FH9Qy901VoqFMis=",
         "owner": "mitchellh",
         "repo": "zig-overlay",
-        "rev": "aa1bf00815a1c8944042999b93ccbab6c48bed75",
+        "rev": "637eff4a4a3a7fa62fc90f942490446b2f10f83a",
         "type": "github"
       },
       "original": {

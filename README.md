@@ -22,45 +22,12 @@ This project is based on C Paho MQTT client library, use leveldb as state databa
 
 ### Running the project on linux
 
-#### Using Nix
 
-Install Nix, [https://nixos.org/download.html](https://nixos.org/download.html)
+#### Using Nix Flake (with nix installed)
 
-
-
-then, using the following `shell.nix` file, 
-
-```
-{ nixpkgs ? <nixpkgs>, iotstuff ? import (fetchTarball
-  "https://github.com/mqttiotstuff/nix-iotstuff-repo/archive/9b12720.tar.gz")
-  { } }:
-
-iotstuff.pkgs.mkShell rec { buildInputs = [ iotstuff.iotmonitor ]; }
-```
-
-run :
-
-```
-nix-shell shell.nix
-```
-
-or :  (with the shell.nix in the folder)
-
-```
-nix-shell
-```
-
-#### Using Nix Flake
+On liner :
 
      nix run git+https://github.com/mqttiotstuff/iotmonitor?submodules=1
-
-
-build with flake :
-
-     git clone --recursive https://github.com/mqttiotstuff/iotmonitor
-     nix build "git+file://$(pwd)?submodules=1" 
-        or nix build .?submodules=1
-
 
 
 
@@ -75,9 +42,7 @@ launch the container from image :
 docker run --rm -d -u $(id --user) -v `pwd`:/config iotmonitor
 ```
 
-
-
-#### From scratch
+#### From raw sources
 
 for building the project, the following elements are needed :
 
@@ -99,8 +64,6 @@ cd ..
 mkdir bin
 zig build -Dcpu=baseline -Dtarget=native-native-gnu -fstage1
 ```
-
-
 
 
 ### Configuration File

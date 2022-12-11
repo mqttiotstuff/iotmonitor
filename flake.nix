@@ -4,13 +4,15 @@
   inputs = {
     nixpkgs.url = "https://github.com/NixOS/nixpkgs/archive/22.05.tar.gz";
     flake-utils.url = "github:numtide/flake-utils";
-    zig.url = "github:mitchellh/zig-overlay";
+    zigpkgs.url = "github:mitchellh/zig-overlay";
   };
 
-  outputs = { self,  zig, nixpkgs, flake-utils, }:
+  outputs = { self, zigpkgs, nixpkgs, flake-utils }:
 
     flake-utils.lib.eachDefaultSystem (system:
-      let pkgs = nixpkgs.legacyPackages.${system};
+      let
+        pkgs = nixpkgs.legacyPackages.${system};
+        zig = zigpkgs.packages.${system}."0.10.0";
       in {
         packages.iotmonitor =
           # Notice the reference to nixpkgs here.
@@ -18,7 +20,8 @@
             name = "iotmonitor";
             src = self;
             buildInputs =
-              [ pkgs.zig pkgs.git pkgs.cmake pkgs.leveldb pkgs.pandoc ];
+              [ zig pkgs.git pkgs.cmake pkgs.leveldb pkgs.pandoc 
+              pkgs.llvmPackages_14.llvm ];
             configurePhase = ''
               ls
               zig version
@@ -26,6 +29,7 @@
 
             buildPhase = ''
               make
+              zig version
               zig build -fstage1
             '';
 

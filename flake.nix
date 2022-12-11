@@ -16,7 +16,7 @@
         # Notice the reference to nixpkgs here.
         pkgs.stdenv.mkDerivation {
         name = "iotmonitor";
-        src = self;
+        src = self; 
         buildInputs = [ pkgs.zig pkgs.git pkgs.cmake pkgs.leveldb pkgs.pandoc ];
         configurePhase = ''
           ls

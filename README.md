@@ -52,14 +52,16 @@ nix-shell
 
 #### Using Nix Flake
 
-
      nix run git+https://github.com/mqttiotstuff/iotmonitor?submodules=1
 
 
 build with flake :
 
      git clone --recursive https://github.com/mqttiotstuff/iotmonitor
-     nix build "git+file://$(pwd)?submodules=1"
+     nix build "git+file://$(pwd)?submodules=1" 
+        or nix build .?submodules=1
+
+
 
 
 #### Using docker, 

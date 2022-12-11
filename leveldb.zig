@@ -277,7 +277,8 @@ pub fn LevelDBHashWithSerialization(
             }
 
             /// iterKey retrieve the value of the iterator
-            /// the memory on the value has been allocated and needs to be freed if not used
+            /// the memory on the value has been allocated 
+            // and needs to be freed if not used
             pub fn iterKey(self: *ItSelf) ?*align(1) KOUT {
                 var read_len: usize = 0;
                 const read: ?[*c]const u8 = cleveldb.leveldb_iter_key(self.innerIt, &read_len);
@@ -316,7 +317,6 @@ pub fn LevelDBHashWithSerialization(
                 const result = cleveldb.leveldb_iter_valid(self.innerIt);
                 return result > 0;
             }
-
            
         };
 
@@ -399,12 +399,13 @@ test "test storing letters" {
             _ = c.sleep(2);
         }
     }
+
     var s = "1\x00AAAA";
     const t = mem.span(s);
     debug.print("test key length : {}\n", .{t[0..].len});
     const lecturealea = try l.get(t[0..]);
     debug.assert(lecturealea != null);
-    debug.print("retrieved : {s}\n", .{lecturealea});
+    debug.print("retrieved : {?}\n", .{lecturealea});
     if (lecturealea) |value| {
         debug.print("random read value, retrieved : {}\n", .{value});
         allocator.destroy(value);
@@ -444,6 +445,7 @@ test "test marshalling" {
 
     const StringMarshall = ArrSerDeserType(u8);
     const stringToMarshall = "hello";
+    debug.print("string to marshall {s}\n", .{ stringToMarshall });
     debug.print("original string ptr {}\n", .{@ptrToInt(stringToMarshall)});
 
     const sspan = mem.span(stringToMarshall);

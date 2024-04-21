@@ -133,7 +133,7 @@ stateTopics="home/esp04/actuators/#"
 ```
 
 - `watchTimeOut` : watch dog for alive state, when the timeout is reached without and interactions on watchTopics, then iotmonitor trigger an expire message for the device
-- `helloTopic` : the topic to observe to welcome the device. This topic trigger the state recovering for the device and agents. IotMonitor, resend the previous stored `stateTopics`
+- `helloTopic` : the topic to observe to welcome the device. This topic trigger the state recovering for the device and agents. IotMonitor, resend the previous stored `stateTopics`, the content of the helloTopic is not used (every first mqtt topic can be used to restore state)
 - `watchTopics` : the topic pattern to observe to know the device is alive
 - `stateTopics` : list of topics for recording the states and reset them as they are welcomed
 

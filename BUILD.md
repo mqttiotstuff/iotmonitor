@@ -42,3 +42,8 @@ build with flake :
      nix build "git+file://$(pwd)?submodules=1" 
         or nix build .?submodules=1
 
+
+#### opening nix flake shell for development
+
+
+	nix shell 'github:mitchellh/zig-overlay'

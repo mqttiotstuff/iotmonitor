@@ -1,48 +1,101 @@
 {
   description = "Flake for building Iotmonitor";
-  # inputs = [ zig git cmake leveldb pandoc ];
+
   inputs = {
-    nixpkgs.url = "https://github.com/NixOS/nixpkgs/archive/22.05.tar.gz";
-    flake-utils.url = "github:numtide/flake-utils";
-    zigpkgs.url = "github:mitchellh/zig-overlay";
+    nixpkgs.url = "https://channels.nixos.org/nixpkgs-unstable/nixexprs.tar.zst";
+
+    flake-compat = {
+      url = "github:edolstra/flake-compat";
+      flake = false;
+    };
+
+    systems = {
+      url = "github:nix-systems/default";
+      flake = false;
+    };
+
+    zig = {
+      url = "github:mitchellh/zig-overlay";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        flake-compat.follows = "flake-compat";
+        systems.follows = "systems";
+      };
+    };
   };
 
-  outputs = { self, zigpkgs, nixpkgs, flake-utils }:
+  outputs = { self, zig, nixpkgs, ... }:
+    let
+      inherit (nixpkgs) lib legacyPackages;
 
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-        zig = zigpkgs.packages.${system}."0.10.0";
-      in {
-        packages.iotmonitor =
-          # Notice the reference to nixpkgs here.
-          pkgs.stdenv.mkDerivation {
-            name = "iotmonitor";
-            src = self;
-            buildInputs = [
-              zig
-              pkgs.git
-              pkgs.cmake
-              pkgs.leveldb
-              pkgs.pandoc
-            ]; # pkgs.llvmPackages_14.llvm
-            configurePhase = ''
-              ls
-              zig version
-            '';
+      platforms = lib.attrNames zig.packages;
 
-            buildPhase = ''
-              make               
-            '';
+      buildablePlatforms =
+        lib.filter
+          (p: !(lib.systems.elaborate p).isDarwin)
+          platforms;
 
-            installPhase = ''
-              mkdir -p $out/bin
-              cp bin/iotmonitor $out/bin
-            '';
+      forAllPlatforms = f:
+        lib.genAttrs platforms (system: f legacyPackages.${system});
 
-          };
+      forBuildablePlatforms = f:
+        lib.genAttrs buildablePlatforms (system: f legacyPackages.${system});
 
-        defaultPackage = self.packages.${system}.iotmonitor;
+      mkIotmonitor = pkgs:
+        pkgs.stdenv.mkDerivation {
+          pname = "iotmonitor";
+          version = "1.0.0";
+
+          src = self;
+
+          buildInputs = [
+            pkgs.leveldb
+          ];
+
+          nativeBuildInputs = [
+            pkgs.pandoc
+            pkgs.zig
+            pkgs.git
+            pkgs.cmake
+          ];
+
+          configurePhase = ''
+            runHook preConfigure
+            ls
+            zig version
+            runHook postConfigure
+          '';
+
+          buildPhase = ''
+            runHook preBuild
+            make
+            runHook postBuild
+          '';
+
+          installPhase = ''
+            runHook preInstall
+            mkdir -p $out/bin
+            cp bin/iotmonitor $out/bin/
+            runHook postInstall
+          '';
+        };
+
+    in {
+      packages = forBuildablePlatforms (pkgs: {
+        iotmonitor = mkIotmonitor pkgs;
+        default = mkIotmonitor pkgs;
       });
 
+      devShells = forAllPlatforms (pkgs: {
+        default = pkgs.mkShell {
+          packages = [
+            pkgs.leveldb
+            pkgs.pandoc
+            pkgs.zig
+            pkgs.git
+            pkgs.cmake
+          ];
+        };
+      });
+    };
 }

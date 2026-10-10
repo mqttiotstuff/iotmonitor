@@ -1,4 +1,7 @@
 
+## Version 0.2.8
+
+- move to zig 0.10.0
 
 ## Version 0.2.7
 

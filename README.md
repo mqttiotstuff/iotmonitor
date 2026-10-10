@@ -27,7 +27,7 @@ This project is based on C Paho MQTT client library, use leveldb as state databa
 
 On liner :
 
-     nix run git+https://github.com/mqttiotstuff/iotmonitor?submodules=1
+nix run git+https://github.com/mqttiotstuff/iotmonitor?submodules=1
 
 
 

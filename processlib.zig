@@ -1,14 +1,11 @@
 // process lib, permit to launch loosely coupled processes
 
 const std = @import("std");
-const debug = std.debug;
 const log = std.log;
-const os = std.os;
-const mem = std.mem;
-const fs = std.fs;
-const File = fs.File;
-const Dir = fs.Dir;
 const fmt = std.fmt;
+const Io = std.Io;
+const Dir = Io.Dir;
+const File = Io.File;
 
 pub const ProcessInformation = struct {
     pid: i32 = 0,
@@ -48,26 +45,27 @@ pub const ProcessInformation = struct {
 // return false if the process does not exists,
 // return true and the processInfo is populated with the command line options
 pub fn getProcessInformations(pid: i32, processInfo: *ProcessInformation) !bool {
+    var threaded_io = Io.Threaded.init(std.heap.c_allocator, .{});
+    defer threaded_io.deinit();
+    const io = threaded_io.io();
+
     var buffer = [_]u8{'\x00'} ** 8192;
 
-    const options = Dir.OpenDirOptions{
-        .access_sub_paths = true,
-    };
-    var procDir = try fs.cwd().openDir("/proc", options);
-    defer procDir.close();
+    var procDir = try Dir.cwd().openDir(io, "/proc", .{ .access_sub_paths = true });
+    defer procDir.close(io);
 
     const r = try fmt.bufPrint(&buffer, "{}", .{pid});
-    var subprocDir: Dir = procDir.openDir(r, options) catch {
+    var subprocDir = procDir.openDir(io, r, .{ .access_sub_paths = true }) catch {
         log.warn("no dir associated to proc {}", .{pid});
         return false;
     };
-    defer subprocDir.close();
+    defer subprocDir.close(io);
 
-    var commandLineFile: File = try subprocDir.openFile("cmdline", File.OpenFlags{});
-    defer commandLineFile.close();
+    var commandLineFile = try subprocDir.openFile(io, "cmdline", .{});
+    defer commandLineFile.close(io);
 
-    const readSize = try commandLineFile.pread(processInfo.commandlinebuffer[0..], 0);
-    processInfo.commandlinebuffer_size = @intCast(u16, readSize);
+    const readSize = try commandLineFile.readPositional(io, &.{processInfo.commandlinebuffer[0..]}, 0);
+    processInfo.commandlinebuffer_size = @intCast(readSize);
 
     processInfo.*.pid = pid;
 
@@ -90,16 +88,16 @@ const ProcessInformationCallback = fn (processInformation: *ProcessInformation) 
 // function that list processes and grab command line arguments
 // a call back is taken from
 pub fn listProcesses(callback: ProcessInformationCallback) !void {
-    const options = Dir.OpenDirOptions{
-        .access_sub_paths = true,
-        // .iterate = true,
-    };
-    var procDir = try fs.cwd().openIterableDir("/proc", options);
-    defer procDir.close();
+    var threaded_io = Io.Threaded.init(std.heap.c_allocator, .{});
+    defer threaded_io.deinit();
+    const io = threaded_io.io();
+
+    var procDir = try Dir.cwd().openDir(io, "/proc", .{ .access_sub_paths = true, .iterate = true });
+    defer procDir.close(io);
 
     var dirIterator = procDir.iterate();
-    while (try dirIterator.next()) |f| {
-        if (f.kind == File.Kind.File) {
+    while (try dirIterator.next(io)) |f| {
+        if (f.kind == .file) {
             continue;
         }
 

@@ -2,7 +2,6 @@
 
 const std = @import("std");
 const builtin = @import("builtin");
-const trait = std.meta.trait;
 const debug = std.debug;
 const log = std.log;
 const assert = debug.assert;
@@ -24,8 +23,8 @@ const c = @cImport({
 fn SerDeserAPI(comptime T: type, comptime INType: type, comptime OUTType: type) type {
     _ = T;
     return struct {
-        const MarshallFn = fn (*const INType, *Allocator) []const u8;
-        const UnMarshallFn = fn ([]const u8, *Allocator) *align(1) OUTType;
+        const MarshallFn = fn (*const INType, Allocator) []const u8;
+        const UnMarshallFn = fn ([]const u8, Allocator) *align(1) OUTType;
         marshall: MarshallFn,
         unMarshall: UnMarshallFn,
     };
@@ -34,16 +33,16 @@ fn SerDeserAPI(comptime T: type, comptime INType: type, comptime OUTType: type) 
 pub fn ArrSerDeserType(comptime T: type) SerDeserAPI(T, []const T, []T) {
     const MI = struct {
         // default functions when the type is still serializable
-        fn noMarshallFn(t: *const []const T, allocator: *Allocator) []const u8 {
+        fn noMarshallFn(t: *const []const T, allocator: Allocator) []const u8 {
             _ = allocator;
             return t.*;
         }
 
         // unmarshall must make a copy,
         // because leveldb has its own buffers
-        fn noUnMarshallFn(e: []const u8, allocator: *Allocator) *align(1) []T {
-            const ptrContainer = @ptrToInt(&e);
-            const elements = @intToPtr(*align(1) []T, ptrContainer);
+        fn noUnMarshallFn(e: []const u8, allocator: Allocator) *align(1) []T {
+            const ptrContainer = @intFromPtr(&e);
+            const elements = @as(*align(1) []T, @ptrFromInt(ptrContainer));
             const pNew = allocator.create([]T) catch unreachable;
             pNew.* = elements.*;
             return pNew;
@@ -59,24 +58,24 @@ pub fn ArrSerDeserType(comptime T: type) SerDeserAPI(T, []const T, []T) {
 // need sed deser for storing on disk
 pub fn SerDeserType(comptime T: type) SerDeserAPI(T, T, T) {
     comptime {
-        if (@typeInfo(T) == .Pointer) {
+        if (@typeInfo(T) == .pointer) {
             @panic("this ser deser type is only for simple types");
         }
     }
 
     const MI = struct {
         // default functions when the type is still serializable
-        fn noMarshallFn(t: *const T, allocator: *Allocator) []const u8 {
+        fn noMarshallFn(t: *const T, allocator: Allocator) []const u8 {
             _ = allocator;
             return mem.asBytes(t);
         }
 
         // unmarshall must make a copy,
         // because leveldb has its own buffers
-        fn noUnMarshallFn(e: []const u8, allocator: *Allocator) *align(1) T {
+        fn noUnMarshallFn(e: []const u8, allocator: Allocator) *align(1) T {
             _ = allocator;
-            const eptr = @ptrToInt(&e[0]);
-            return @intToPtr(*align(1) T, eptr);
+            const eptr = @intFromPtr(&e[0]);
+            return @as(*align(1) T, @ptrFromInt(eptr));
         }
     };
 
@@ -88,10 +87,10 @@ pub fn SerDeserType(comptime T: type) SerDeserAPI(T, T, T) {
 }
 
 test "use of noMarshallFn" {
-    var allocator = std.heap.c_allocator;
+    const allocator = std.heap.c_allocator;
     const i: u32 = 12;
-    var r = SerDeserType(u32).marshall(&i, &allocator);
-    const ur = SerDeserType(u32).unMarshall(r, &allocator);
+    const r = SerDeserType(u32).marshall(&i, allocator);
+    const ur = SerDeserType(u32).unMarshall(r, allocator);
     debug.assert(i == ur.*);
 }
 
@@ -128,13 +127,13 @@ pub fn LevelDBHashWithSerialization(
         leveldbHandle: *cleveldb.leveldb_t = undefined,
         writeOptions: *cleveldb.leveldb_writeoptions_t = undefined,
         readOptions: *cleveldb.leveldb_readoptions_t = undefined,
-        allocator: *Allocator,
+        allocator: Allocator,
 
         const Self = @This();
         const KSerDeser = marshallKey;
         const VSerDeser = marshallValue;
 
-        pub fn init(allocator: *Allocator) !*Self {
+        pub fn init(allocator: Allocator) !*Self {
             const self = try allocator.create(Self);
             self.allocator = allocator;
             self.writeOptions = cleveldb.leveldb_writeoptions_create().?;
@@ -229,20 +228,20 @@ pub fn LevelDBHashWithSerialization(
                 debug.print("key not found \n", .{});
                 return null;
             }
-            const torelease = @ptrCast(*anyopaque, read);
+            const torelease = @as(*anyopaque, @ptrCast(read));
             defer cleveldb.leveldb_free(torelease);
             // _ = c.printf("returned : %s %d\n", read, read_len);
             
-            const structAddr = @ptrToInt(read);
+            const structAddr = @intFromPtr(read);
 
-            var cmsg = @intToPtr([*]u8, structAddr);
+            var cmsg = @as([*]u8, @ptrFromInt(structAddr));
             const vTypePtr = VSerDeser.unMarshall(cmsg[0..read_len], self.allocator);
             
             //return &cmsg[0..read_len];
-            var allocatedResult = try self.allocator.alloc(u8, read_len);
-            mem.copy(u8, allocatedResult, vTypePtr.*);
+            const allocatedResult = try self.allocator.alloc(u8, read_len);
+            @memcpy(allocatedResult, vTypePtr.*);
 
-            var arrayptr = try self.allocator.create([]u8);
+            const arrayptr = try self.allocator.create([]u8);
             arrayptr.* = allocatedResult; 
 
             return arrayptr;
@@ -253,10 +252,10 @@ pub fn LevelDBHashWithSerialization(
             const ItSelf = @This();
             db: *Self = undefined,
             innerIt: *cleveldb.leveldb_iterator_t = undefined,
-            allocator: *Allocator = undefined,
+            allocator: Allocator = undefined,
             const ConstIter_t = *const cleveldb.leveldb_iterator_t;
 
-            fn init(allocator: *Allocator, db: *Self) !*Iterator {
+            fn init(allocator: Allocator, db: *Self) !*Iterator {
                 const obj = try allocator.create(Iterator);
                 errdefer allocator.destroy(obj);
                 obj.allocator = allocator;
@@ -284,8 +283,8 @@ pub fn LevelDBHashWithSerialization(
                 const read: ?[*c]const u8 = cleveldb.leveldb_iter_key(self.innerIt, &read_len);
 
                 if (read) |existValue| {
-                    const structAddr = @ptrToInt(existValue);
-                    var cmsg = @intToPtr([*]const u8, structAddr);
+                    const structAddr = @intFromPtr(existValue);
+                    var cmsg = @as([*]const u8, @ptrFromInt(structAddr));
                     const spanRead = mem.bytesAsSlice(u8, cmsg[0..read_len]);
                     const vTypePtr = KSerDeser.unMarshall(spanRead, self.allocator);
                     return vTypePtr;
@@ -300,8 +299,8 @@ pub fn LevelDBHashWithSerialization(
                 const read: ?[*c]const u8 = cleveldb.leveldb_iter_value(self.innerIt, &read_len);
 
                 if (read) |existValue| {
-                    const structAddr = @ptrToInt(existValue);
-                    var cmsg = @intToPtr([*]const u8, structAddr);
+                    const structAddr = @intFromPtr(existValue);
+                    var cmsg = @as([*]const u8, @ptrFromInt(structAddr));
                     const spanRead = mem.bytesAsSlice(u8, cmsg[0..read_len]);
                     const vTypePtr = VSerDeser.unMarshall(spanRead, self.allocator);
                     return vTypePtr;
@@ -328,12 +327,12 @@ pub fn LevelDBHashWithSerialization(
 
 test "test iterators" {
     // already created database
-    var filename = "countingstorage";
+    const filename = "countingstorage";
 
-    var allocator = std.heap.c_allocator;
+    const allocator = std.heap.c_allocator;
 
     const SS = LevelDBHash(u32, u32);
-    var l = try SS.init(&allocator);
+    var l = try SS.init(allocator);
     defer l.deinit();
     debug.print("opening databse", .{});
     try l.open(filename);
@@ -349,7 +348,7 @@ test "test iterators" {
     while (iterator.isValid()) {
         debug.print("iterKey", .{});
         r = iterator.iterKey();
-        var v = iterator.iterValue();
+        const v = iterator.iterValue();
         debug.print("key :{} value: {}\n", .{ r.?.*, v.?.* });
         allocator.destroy(v.?);
         iterator.next();
@@ -359,10 +358,10 @@ test "test iterators" {
 
 test "test no specialization" {
     
-    var allocator = std.heap.c_allocator;
+    const allocator = std.heap.c_allocator;
 
     const SS = LevelDBHash(u32, u8);
-    _ = try SS.init(&allocator);
+    _ = try SS.init(allocator);
     
     //var l = try SS.init(&allocator);
     // assert(l != null);
@@ -370,12 +369,12 @@ test "test no specialization" {
 
 
 test "test storing letters" {
-    var filename = "stringstoragetest";
+    const filename = "stringstoragetest";
 
-    var allocator = std.heap.c_allocator;
+    const allocator = std.heap.c_allocator;
 
     const SS = LevelDBHashArray(u8, u8);
-    var l = try SS.init(&allocator);
+    var l = try SS.init(allocator);
     defer l.deinit();
 
     _ = try l.open(filename);
@@ -400,7 +399,7 @@ test "test storing letters" {
         }
     }
 
-    var s = "1\x00AAAA";
+    const s = "1\x00AAAA";
     const t = mem.span(s);
     debug.print("test key length : {}\n", .{t[0..].len});
     const lecturealea = try l.get(t[0..]);
@@ -441,20 +440,20 @@ test "test storing letters" {
 test "test marshalling" {
     debug.print("start marshall tests\n", .{});
 
-    var allocator = std.heap.c_allocator;
+    const allocator = std.heap.c_allocator;
 
     const StringMarshall = ArrSerDeserType(u8);
     const stringToMarshall = "hello";
     debug.print("string to marshall {s}\n", .{ stringToMarshall });
-    debug.print("original string ptr {}\n", .{@ptrToInt(stringToMarshall)});
+    debug.print("original string ptr {}\n", .{@intFromPtr(stringToMarshall.ptr)});
 
     const sspan = mem.span(stringToMarshall);
     debug.print("span type \"{}\"\n", .{@typeInfo(@TypeOf(sspan))});
     debug.print("span {any}\n", .{sspan});
 
-    const marshalledC = StringMarshall.marshall(&sspan, &allocator);
+    const marshalledC = StringMarshall.marshall(&sspan, allocator);
     debug.print("marshalled \"{any}\", ptr {any} \n", .{ marshalledC, marshalledC.ptr });
-    debug.print("pointer to first element {} \n", .{@ptrToInt(marshalledC.ptr)});
+    debug.print("pointer to first element {} \n", .{@intFromPtr(marshalledC.ptr)});
 
     debug.assert(&marshalledC[0] == &stringToMarshall[0]);
 }
@@ -462,7 +461,7 @@ test "test marshalling" {
 // test "test storing ints" {
 //     var filename = "countingstorage";
  
-//     var allocator = std.heap.c_allocator;
+//     const allocator = std.heap.c_allocator;
 
 //     const SS = LevelDBHash(u32, u32);
 //     var l = try SS.init(&allocator);
@@ -483,7 +482,7 @@ test "test marshalling" {
 // test "test reading ints" {
 //     var filename = "countingstorage";
 
-//     var allocator = std.heap.c_allocator;
+//     const allocator = std.heap.c_allocator;
     
 //     const SS = LevelDBHash(u32, u32);
 //     var l = try SS.init(&allocator);
@@ -507,7 +506,7 @@ test "test marshalling" {
 //     // var filename : [100]u8 = [_]u8{0} ** 100;
 //     var filename = "hellosimpletypes2\x00";
 
-//     var allocator = std.heap.c_allocator;
+//     const allocator = std.heap.c_allocator;
 
 //     const u32SerializationType = SerDeserType(u32);
 //     const u8ArrSerializationType = ArrSerDeserType(u8);
@@ -546,7 +545,7 @@ test "creating file" {
        defer cleveldb.leveldb_free(err);
        return;
    }
-   var woptions = cleveldb.leveldb_writeoptions_create();
+   const woptions = cleveldb.leveldb_writeoptions_create();
    cleveldb.leveldb_put(db, woptions, "key", 3, "value", 6, &err);
 
    const roptions = cleveldb.leveldb_readoptions_create();

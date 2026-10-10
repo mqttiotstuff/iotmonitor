@@ -15,7 +15,7 @@ const c = @cImport({
     //@cInclude("paho.mqtt.c/src/MQTTClient.h");
 });
 
-const CallBack = fn (topic: []u8, message: []u8) void;
+const CallBack = *const fn (topic: []u8, message: []u8) void;
 
 const MAX_REGISTERED_TOPICS = 10;
 
@@ -26,7 +26,7 @@ const mqttlibError = error{FailToRegister};
 pub const MqttCnx = struct {
     const Self = @This();
 
-    allocator: *mem.Allocator,
+    allocator: mem.Allocator,
     handle: cmqtt.MQTTClient = undefined,
     callBack: CallBack = undefined,
     latestDeliveryToken: *cmqtt.MQTTClient_deliveryToken = undefined,
@@ -41,43 +41,42 @@ pub const MqttCnx = struct {
         _ = c.printf("%s -> %s\n", topic.ptr, message.ptr);
     }
 
-    fn _connLost(ctx: ?*anyopaque, m: [*c]u8) callconv(.C) void {
+    fn _connLost(ctx: ?*anyopaque, m: [*c]u8) callconv(.c) void {
         _ = m;
-        const self_ctx = @intToPtr(*Self, @ptrToInt(ctx));
+        const self_ctx = @as(*Self, @ptrFromInt(@intFromPtr(ctx)));
         _ = c.printf("connection lost %d\n", self_ctx);
     }
 
-    fn _msgArrived(ctx: ?*anyopaque, topic: [*c]u8, topic_length: c_int, message: [*c]cmqtt.MQTTClient_message) callconv(.C) c_int {
+    fn _msgArrived(ctx: ?*anyopaque, topic: [*c]u8, topic_length: c_int, message: [*c]cmqtt.MQTTClient_message) callconv(.c) c_int {
         _ = topic_length;
 
-        const messagePtrAddress = @ptrToInt(&message);
-        var cmsg = @intToPtr([*c][*c]cmqtt.MQTTClient_message, messagePtrAddress);
+        const messagePtrAddress = @intFromPtr(&message);
+        const cmsg = @as([*c][*c]cmqtt.MQTTClient_message, @ptrFromInt(messagePtrAddress));
         defer cmqtt.MQTTClient_freeMessage(cmsg);
         defer cmqtt.MQTTClient_free(topic);
 
         // unsafe conversion
-        const self_ctx = @intToPtr(*Self, @ptrToInt(ctx));
+        const self_ctx = @as(*Self, @ptrFromInt(@intFromPtr(ctx)));
 
         // paho always return a 0 in topic_length, we must then compute it
         // _ = c.printf("topic length is %d \n", topic_length);
 
         const tlength: usize = c.strlen(topic);
         // topic_length always 0 ... non sense
-        const mlength = @intCast(u32, message.*.payloadlen);
+        const mlength: u32 = @intCast(message.*.payloadlen);
 
-        const am = @ptrToInt(message.*.payload);
-        const mptr = @intToPtr([*]u8, am);
+        const am = @intFromPtr(message.*.payload);
+        const mptr = @as([*]u8, @ptrFromInt(am));
         // pass to zig in proper way with slices
         self_ctx.callBack(topic[0..tlength], mptr[0..mlength]);
 
         return 1; // properly handled
     }
 
-    fn _delivered(ctx: ?*anyopaque, token: cmqtt.MQTTClient_deliveryToken) callconv(.C) void {
-
+    fn _delivered(ctx: ?*anyopaque, token: cmqtt.MQTTClient_deliveryToken) callconv(.c) void {
         // _ = c.printf("%s", "received token");
         // unsafe conversion
-        const self_ctx = @intToPtr(*Self, @ptrToInt(ctx));
+        const self_ctx = @as(*Self, @ptrFromInt(@intFromPtr(ctx)));
         self_ctx.*.latestDeliveryToken.* = token;
     }
 
@@ -85,28 +84,28 @@ pub const MqttCnx = struct {
         _ = self;
     }
 
-    pub fn init(allocator: *mem.Allocator, serverAddress: []const u8, clientid: []const u8, username: []const u8, password: []const u8) !*Self {
+    pub fn init(allocator: mem.Allocator, serverAddress: []const u8, clientid: []const u8, username: []const u8, password: []const u8) !*Self {
         var handle: cmqtt.MQTTClient = undefined;
 
         // we need to make a safe string with zero ending
         const zServerAddress = try allocator.alloc(u8, serverAddress.len + 1);
         // defer allocator.free(zServerAddress);
-        mem.copy(u8, zServerAddress, serverAddress[0..]);
+        @memcpy(zServerAddress[0..serverAddress.len], serverAddress);
         zServerAddress[serverAddress.len] = '\x00';
 
         const zusername = try allocator.alloc(u8, username.len + 1);
         // defer allocator.free(zusername);
-        mem.copy(u8, zusername, username[0..]);
+        @memcpy(zusername[0..username.len], username);
         zusername[username.len] = '\x00';
 
         const zpassword = try allocator.alloc(u8, password.len + 1);
         // defer allocator.free(zpassword);
-        mem.copy(u8, zpassword, password[0..]);
+        @memcpy(zpassword[0..password.len], password);
         zpassword[password.len] = '\x00';
 
         const zclientid = try allocator.alloc(u8, clientid.len + 1);
         // defer allocator.free(zclientid);
-        mem.copy(u8, zclientid, clientid[0..]);
+        @memcpy(zclientid[0..clientid.len], clientid);
         zclientid[clientid.len] = '\x00';
 
         // convert to C the input parameters (ensuring the sentinel)
@@ -221,14 +220,14 @@ pub const MqttCnx = struct {
 
     // internal method, to permit to retry connect
     fn _publishWithQos(self: *Self, topic: [*c]const u8, msg: []const u8, qos: u8) !void {
-        const messageLength: c_int = @intCast(c_int, msg.len);
+        const messageLength: c_int = @intCast(msg.len);
 
         if (msg.len == 0) {
             return;
         }
         // beacause c declared the message as mutable (not const),
         // convert it to const type
-        const constMessageContent: [*]u8 = @intToPtr([*]u8, @ptrToInt(msg.ptr));
+        const constMessageContent: [*]u8 = @as([*]u8, @ptrFromInt(@intFromPtr(msg.ptr)));
 
         const HEADER_MESSAGE = [_]u8{ 'M', 'Q', 'T', 'M' };
 
@@ -250,7 +249,7 @@ pub const MqttCnx = struct {
             },
         };
 
-        var token = try self.allocator.create(cmqtt.MQTTClient_deliveryToken);
+        const token = try self.allocator.create(cmqtt.MQTTClient_deliveryToken);
         defer self.allocator.destroy(token);
 
         const resultPublish = cmqtt.MQTTClient_publishMessage(self.handle, topic, &mqttmessage, token);
@@ -262,7 +261,7 @@ pub const MqttCnx = struct {
         // wait for sent
 
         if (qos > 0) {
-            const waitResult = cmqtt.MQTTClient_waitForCompletion(self.handle, token.*, @intCast(c_ulong, 2000));
+            const waitResult = cmqtt.MQTTClient_waitForCompletion(self.handle, token.*, @intCast(2000));
             if (waitResult != 0) return error.MQTTWaitTokenError;
             while (self.latestDeliveryToken.* != token.*) {
                 // CPU breath, and yield
@@ -280,7 +279,7 @@ pub const MqttCnx = struct {
         }
 
         const ptr = try self.allocator.alloc(u8, topic.len + 1);
-        mem.copy(u8, ptr, topic[0..]);
+        @memcpy(ptr[0..topic.len], topic);
         ptr[topic.len] = '\x00';
         self.reconnect_registered_topics[self.*.reconnect_registered_topics_length] = ptr;
         self.reconnect_registered_topics_length = self.*.reconnect_registered_topics_length + 1;
@@ -297,12 +296,12 @@ pub const MqttCnx = struct {
 test "testconnect mqtt home" {
     var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
     defer arena.deinit();
-    const allocator = &arena.allocator;
+    const allocator = arena.allocator();
 
-    var serverAddress: []const u8 = "tcp://192.168.4.16:1883";
-    var clientid: []const u8 = "clientid";
-    var userName: []const u8 = "sys";
-    var password: []const u8 = "pwd";
+    const serverAddress: []const u8 = "tcp://192.168.4.16:1883";
+    const clientid: []const u8 = "clientid";
+    const userName: []const u8 = "sys";
+    const password: []const u8 = "pwd";
 
     // var handle: cmqtt.MQTTClient = null;
 
@@ -328,12 +327,12 @@ test "testconnect mqtt home" {
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.c_allocator);
     defer arena.deinit();
-    const allocator = &arena.allocator;
+    const allocator = arena.allocator();
 
-    var serverAddress: []const u8 = "tcp://192.168.4.16:1883";
-    var clientid: []const u8 = "clientid";
-    var userName: []const u8 = "sys";
-    var password: []const u8 = "pwd";
+    const serverAddress: []const u8 = "tcp://192.168.4.16:1883";
+    const clientid: []const u8 = "clientid";
+    const userName: []const u8 = "sys";
+    const password: []const u8 = "pwd";
 
     var cnx = try MqttCnx.init(allocator, serverAddress, clientid, userName, password);
     _ = try cnx.register("home/#");

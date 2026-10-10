@@ -1,56 +1,51 @@
 const std = @import("std");
-const mem = std.mem;
-const fs = std.fs;
-const Builder = std.build.Builder;
-const ArrayList = std.ArrayList;
-const builtin = @import("builtin");
-const Target = std.Target;
-const FileSource = std.build.FileSource;
 
-pub fn build(b: *Builder) void {
-    const exe = b.addExecutable("iotmonitor", "iotmonitor.zig");
-
+pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
-    exe.setTarget(target);
-    exe.setBuildMode(b.standardReleaseOptions());
+    const optimize = b.standardOptimizeOption(.{});
 
-    exe.addPackagePath("toml", "zig-toml/src/toml.zig");
-    exe.addPackagePath("clap", "zig-clap/clap.zig");
-    exe.addPackage(.{
-        .name = "routez",
-        .source = FileSource.relative("routez/src/routez.zig"),
-        .dependencies = &[_]std.build.Pkg{.{
-            .name = "zuri",
-            .source = FileSource.relative("routez/zuri/src/zuri.zig"),
-        }},
+    const clap_dep = b.dependency("clap", .{});
+    const clap_mod = clap_dep.module("clap");
+
+    const toml_mod = b.createModule(.{
+        .root_source_file = b.path("zig-toml/src/toml.zig"),
+        .target = target,
+        .optimize = optimize,
     });
 
-    const Activate_Tracy = false;
+    const tracy_mod = b.createModule(.{
+        .root_source_file = b.path("nozig-tracy/src/lib.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
 
-    if (Activate_Tracy) {
-        exe.addPackage(.{ .name = "tracy", .source = FileSource.relative("zig-tracy/src/lib.zig") });
-        exe.addIncludePath("tracy/");
-        exe.addLibraryPath("tracy/library/unix");
-        exe.linkSystemLibrary("tracy-debug");
-    } else {
-        exe.addPackage(.{ .name = "tracy", .source = FileSource.relative("nozig-tracy/src/lib.zig") });
-    }
+    const root_mod = b.createModule(.{
+        .root_source_file = b.path("iotmonitor.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+        .imports = &.{
+            .{ .name = "clap", .module = clap_mod },
+            .{ .name = "toml", .module = toml_mod },
+            .{ .name = "tracy", .module = tracy_mod },
+        },
+    });
 
-    exe.setOutputDir("bin");
-    // exe.setTarget(.{ .cpu = builtin.Arch.arm });
+    root_mod.addIncludePath(b.path("paho.mqtt.c/src"));
+    root_mod.addObjectFile(b.path("paho.mqtt.c/src/libpaho-mqtt3c.a"));
+    root_mod.linkSystemLibrary("leveldb", .{});
 
-    // stripping symbols reduce the size of the exe
-    // exe.strip = true;
-    exe.linkLibC();
+    const exe = b.addExecutable(.{
+        .name = "iotmonitor",
+        .root_module = root_mod,
+    });
 
-    // static add the paho mqtt library
-    exe.addIncludePath("paho.mqtt.c/src");
-    exe.addLibraryPath("paho.mqtt.c/build/output");
-    exe.addLibraryPath("paho.mqtt.c/src");
-    exe.addObjectFile("paho.mqtt.c/src/libpaho-mqtt3c.a");
+    b.installArtifact(exe);
 
-    // these libs are needed by leveldb backend
-    exe.linkSystemLibrary("leveldb");
-
-    b.default_step.dependOn(&exe.step);
+    const install_bin = b.addInstallFile(
+        exe.getEmittedBin(),
+        "../bin/iotmonitor",
+    );
+    install_bin.step.dependOn(&exe.step);
+    b.getInstallStep().dependOn(&install_bin.step);
 }

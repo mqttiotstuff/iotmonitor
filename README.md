@@ -132,8 +132,7 @@ The counter is resetted at each startup.
 
 ### Credits
 
-- zig-toml : for zig toml parser
+- sam701/zig-toml : for zig toml parser
 - paho eclipse mqtt c library
 - levedb database
-- routez : for http server integration
 

@@ -5,13 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const clap_dep = b.dependency("clap", .{});
-    const clap_mod = clap_dep.module("clap");
-
-    const toml_mod = b.createModule(.{
-        .root_source_file = b.path("zig-toml/src/toml.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
+    const toml_dep = b.dependency("toml", .{});
 
     const tracy_mod = b.createModule(.{
         .root_source_file = b.path("nozig-tracy/src/lib.zig"),
@@ -25,8 +19,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .link_libc = true,
         .imports = &.{
-            .{ .name = "clap", .module = clap_mod },
-            .{ .name = "toml", .module = toml_mod },
+            .{ .name = "clap", .module = clap_dep.module("clap") },
+            .{ .name = "toml", .module = toml_dep.module("toml") },
             .{ .name = "tracy", .module = tracy_mod },
         },
     });

@@ -10,9 +10,3 @@
 [submodule "tracy"]
 	path = tracy
 	url = https://github.com/wolfpld/tracy
-[submodule "zig-clap"]
-	path = zig-clap
-	url = https://github.com/Hejsil/zig-clap
-[submodule "zig-toml"]
-	path = zig-toml
-	url = https://github.com/aeronavery/zig-toml

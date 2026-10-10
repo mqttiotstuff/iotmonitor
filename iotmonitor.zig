@@ -144,9 +144,25 @@ pub fn secureZero(s: []u8) void {
     }
 }
 
+fn tomlString(table: *const toml.Table, key: []const u8) ?[]const u8 {
+    const value = table.get(key) orelse return null;
+    return switch (value) {
+        .string => |s| s,
+        else => null,
+    };
+}
+
+fn tomlInteger(table: *const toml.Table, key: []const u8) ?i64 {
+    const value = table.get(key) orelse return null;
+    return switch (value) {
+        .integer => |i| i,
+        else => null,
+    };
+}
+
 // parse the device info,
 // device must have a watch topics
-fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !*MonitoringInfo {
+fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *const toml.Table) !*MonitoringInfo {
     const device = try MonitoringInfo.init(allocator);
     errdefer device.deinit();
     const allocName = try allocator.alloc(u8, name.len + 1);
@@ -156,8 +172,7 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
     @memcpy(allocName[0..name.len], name);
     device.name = allocName;
 
-    if (entry.keys.get("exec")) |exec| {
-        const execValue = exec.String;
+    if (tomlString(entry, "exec")) |execValue| {
         assert(execValue.len > 0);
         const execCommand = try allocator.allocSentinel(u8, execValue.len, 0);
         @memcpy(execCommand[0..execValue.len], execValue);
@@ -169,10 +184,9 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
         device.associatedProcessInformation = additionalStructure;
     }
 
-    if (entry.keys.get("watchTopics")) |watch| {
+    if (tomlString(entry, "watchTopics")) |watchValue| {
         // there may have a wildcard at the end
         // strip it to compare to the received topic
-        const watchValue = watch.String;
         assert(watchValue.len > 0);
         const strippedLastWildCard = try stripLastWildCard(watchValue);
         const stopic = try allocator.alloc(u8, strippedLastWildCard.len);
@@ -185,10 +199,9 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
         return error.DEVICE_MUST_HAVE_A_WATCH_TOPIC;
     }
 
-    if (entry.keys.get("stateTopics")) |statewatch| {
+    if (tomlString(entry, "stateTopics")) |watchValue| {
         // there may have a wildcard at the end
         // strip it to compare to the received topic
-        const watchValue = statewatch.String;
         assert(watchValue.len > 0);
         const strippedLastWildCard = try stripLastWildCard(watchValue);
         const stopic = try allocator.alloc(u8, strippedLastWildCard.len);
@@ -199,8 +212,7 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
         }
     }
 
-    if (entry.keys.get("helloTopic")) |hello| {
-        const helloValue = hello.String;
+    if (tomlString(entry, "helloTopic")) |helloValue| {
         assert(helloValue.len > 0);
         const stopic = try allocator.alloc(u8, helloValue.len);
         @memcpy(stopic[0..helloValue.len], helloValue);
@@ -210,8 +222,7 @@ fn parseDevice(allocator: mem.Allocator, name: []const u8, entry: *toml.Table) !
         }
     }
 
-    if (entry.keys.get("watchTimeOut")) |timeout| {
-        const timeOutValue = timeout.Integer;
+    if (tomlInteger(entry, "watchTimeOut")) |timeOutValue| {
         device.timeoutValue = @intCast(timeOutValue);
         if (Verbose) {
             _ = try out.print("watch timeout for topic for device {s}\n", .{device.helloTopic});
@@ -228,91 +239,84 @@ const HttpServerConfig = struct { activateHttp: bool = true, listenAddress: []u8
 var MqttConfig: *Config = undefined;
 var HttpConfig: *HttpServerConfig = undefined;
 
-fn parseTomlConfig(allocator: mem.Allocator, _alldevices: *AllDevices, filename: []const u8) !void {
+fn parseTomlConfig(io: std.Io, allocator: mem.Allocator, _alldevices: *AllDevices, filename: []const u8) !void {
     const t = tracy.trace(@src());
     defer t.end();
 
-    // getting config parameters
-
-    var parser: toml.Parser = undefined;
+    var parser = toml.Parser(toml.Table).init(allocator);
     defer parser.deinit();
 
-    var config = try toml.parseFile(allocator, filename, &parser); // no custom parser
-    defer config.deinit();
+    var parsed = try parser.parseFile(io, filename);
+    defer parsed.deinit();
+    const config = &parsed.value;
 
-    var it = config.keys.iterator();
+    var it = config.iterator();
     while (it.next()) |e| {
-        // get table value
         switch (e.value_ptr.*) {
-            toml.Value.Table => |table| {
-                if (table.name.len >= 7) {
-                    const DEVICEPREFIX = "device_";
-                    const AGENTPREFIX = "agent_";
-                    const isDevice = mem.eql(u8, table.name.ptr[0..DEVICEPREFIX.len], DEVICEPREFIX);
-                    const isAgent = mem.eql(u8, table.name.ptr[0..AGENTPREFIX.len], AGENTPREFIX);
-                    if (isDevice or isAgent) {
-                        if (Verbose) {
-                            try out.print("device found :{s}\n", .{table.name});
-                        }
-                        var prefixlen = AGENTPREFIX.len;
-                        if (isDevice) prefixlen = DEVICEPREFIX.len;
+            .table => |table| {
+                const section = e.key_ptr.*;
+                if (section.len < 7) continue;
 
-                        const dev = try parseDevice(allocator, table.name.ptr[prefixlen..table.name.len], table);
-                        if (Verbose) {
-                            try out.print("add {s} to device list, with watch {s} and state {s} \n", .{ dev.name, dev.watchTopics, dev.stateTopics orelse "(none)" });
-                        }
-                        _ = try _alldevices.put(dev.name, dev);
-                    } else {
-                        try out.print("bad prefix for section :{s} , only device_ or agent_ accepted, skipped \n", .{e.key_ptr.*});
+                const DEVICEPREFIX = "device_";
+                const AGENTPREFIX = "agent_";
+                const isDevice = mem.eql(u8, section[0..DEVICEPREFIX.len], DEVICEPREFIX);
+                const isAgent = mem.eql(u8, section[0..AGENTPREFIX.len], AGENTPREFIX);
+                if (isDevice or isAgent) {
+                    if (Verbose) {
+                        try out.print("device found :{s}\n", .{section});
                     }
+                    const prefixlen: usize = if (isDevice) DEVICEPREFIX.len else AGENTPREFIX.len;
+
+                    const dev = try parseDevice(allocator, section[prefixlen..], table);
+                    if (Verbose) {
+                        try out.print("add {s} to device list, with watch {s} and state {s} \n", .{ dev.name, dev.watchTopics, dev.stateTopics orelse "(none)" });
+                    }
+                    _ = try _alldevices.put(dev.name, dev);
+                } else if (!mem.eql(u8, section, "mqtt") and !mem.eql(u8, section, "http")) {
+                    try out.print("bad prefix for section :{s} , only device_ or agent_ accepted, skipped \n", .{section});
                 }
             },
-            toml.Value.None, toml.Value.String, toml.Value.Boolean, toml.Value.Integer, toml.Value.Float, toml.Value.Array, toml.Value.ManyTables => continue,
+            else => continue,
         }
     }
 
     const conf = try allocator.create(Config);
 
-    if (config.keys.get("mqtt")) |mqttconfig| {
-        if (mqttconfig.Table.keys.get("serverAddress")) |configAdd| {
-            conf.mqttBroker = try allocator.alloc(u8, configAdd.String.len);
-            @memcpy(conf.mqttBroker[0..configAdd.String.len], configAdd.String);
-        } else {
-            return error.noKeyServerAddress;
-        }
+    const mqtt_value = config.get("mqtt") orelse return error.ConfigNoMqttSection;
+    const mqttconfig = switch (mqtt_value) {
+        .table => |table| table,
+        else => return error.ConfigNoMqttSection,
+    };
 
-        if (mqttconfig.Table.keys.get("user")) |u| {
-            conf.user = try allocator.alloc(u8, u.String.len);
-            @memcpy(conf.user[0..u.String.len], u.String);
-        } else {
-            return error.ConfigNoUser;
-        }
-
-        if (mqttconfig.Table.keys.get("password")) |p| {
-            conf.password = try allocator.alloc(u8, p.String.len);
-            @memcpy(conf.password[0..p.String.len], p.String);
-        } else {
-            return error.ConfigNoPassword;
-        }
-
-        if (mqttconfig.Table.keys.get("clientid")) |cid| {
-            conf.clientid = try allocator.alloc(u8, cid.String.len);
-            @memcpy(conf.clientid[0..cid.String.len], cid.String);
-
-            try out.print("Using {s} as clientid \n", .{conf.clientid});
-        } else {
-            conf.clientid = try allocator.alloc(u8, "iotmonitor".len);
-            @memcpy(conf.clientid[0.."iotmonitor".len], "iotmonitor");
-        }
-
-        const topicBase = if (mqttconfig.Table.keys.get("baseTopic")) |baseTopic| baseTopic.String else "home/monitoring";
-
-        conf.mqttIotmonitorBaseTopic = try allocator.alloc(u8, topicBase.len + 1);
-        conf.mqttIotmonitorBaseTopic[topicBase.len] = 0;
-        @memcpy(conf.mqttIotmonitorBaseTopic[0..topicBase.len], topicBase[0..topicBase.len]);
+    if (tomlString(mqttconfig, "serverAddress")) |configAdd| {
+        conf.mqttBroker = try allocator.dupe(u8, configAdd);
     } else {
-        return error.ConfigNoMqttSection;
+        return error.noKeyServerAddress;
     }
+
+    if (tomlString(mqttconfig, "user")) |u| {
+        conf.user = try allocator.dupe(u8, u);
+    } else {
+        return error.ConfigNoUser;
+    }
+
+    if (tomlString(mqttconfig, "password")) |p| {
+        conf.password = try allocator.dupe(u8, p);
+    } else {
+        return error.ConfigNoPassword;
+    }
+
+    if (tomlString(mqttconfig, "clientid")) |cid| {
+        conf.clientid = try allocator.dupe(u8, cid);
+        try out.print("Using {s} as clientid \n", .{conf.clientid});
+    } else {
+        conf.clientid = try allocator.dupe(u8, "iotmonitor");
+    }
+
+    const topicBase = tomlString(mqttconfig, "baseTopic") orelse "home/monitoring";
+    conf.mqttIotmonitorBaseTopic = try allocator.alloc(u8, topicBase.len + 1);
+    conf.mqttIotmonitorBaseTopic[topicBase.len] = 0;
+    @memcpy(conf.mqttIotmonitorBaseTopic[0..topicBase.len], topicBase);
 
     const httpconf = try allocator.create(HttpServerConfig);
     httpconf.* = .{
@@ -321,16 +325,21 @@ fn parseTomlConfig(allocator: mem.Allocator, _alldevices: *AllDevices, filename:
         .port = 8079,
     };
 
-    if (config.keys.get("http")) |httpconfig| {
-        httpconf.activateHttp = true;
+    if (config.get("http")) |http_value| {
+        switch (http_value) {
+            .table => |http_table| {
+                httpconf.activateHttp = true;
 
-        if (httpconfig.Table.keys.get("bind")) |baddr| {
-            allocator.free(httpconf.listenAddress);
-            httpconf.listenAddress = try allocator.dupe(u8, baddr.String);
-        }
+                if (tomlString(http_table, "bind")) |baddr| {
+                    allocator.free(httpconf.listenAddress);
+                    httpconf.listenAddress = try allocator.dupe(u8, baddr);
+                }
 
-        if (httpconfig.Table.keys.get("port")) |port| {
-            httpconf.port = @intCast(port.Integer);
+                if (tomlInteger(http_table, "port")) |port| {
+                    httpconf.port = @intCast(port);
+                }
+            },
+            else => {},
         }
     }
 
@@ -844,7 +853,7 @@ pub fn main(init: std.process.Init) !void {
     f.close(init.io);
 
     alldevices = AllDevices.init(globalAllocator);
-    try parseTomlConfig(globalAllocator, &alldevices, configurationFile);
+    try parseTomlConfig(init.io, globalAllocator, &alldevices, configurationFile);
 
     try out.writeAll("Opening database\n");
 
